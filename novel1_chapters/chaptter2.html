@@ -1,0 +1,520 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل الأول</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/cover2.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل الثاني
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل الثاني:</p>
+<p>"ك-كارلوس-سي؟" قلت بفزع وأنا أقفز واقفة.</p>
+<p>أومأ برأسه. كان رجلاً ضخم الوجه وأطول مني برأس. كانت تعلو وجهه نظرة متجهمة، كما أن وقفته بدت متوترة وغير ودية.</p>
+<p>"من أين هذه الرسالة؟"</p>
+<p>"إنها من فيوليتا من بلدة فلورنسا. آه، وأنا اسمي يون غاهو. جئت إلى هنا بطلب من شارلوت، ابنة فيوليتا."</p>
+<p>ارتخى وجه كارلوس بشكل واضح عندما ذكرتُ اسم فيوليتا. وعندما نظرت إليه مرة أخرى، أدركت أن تعبيره فقط هو من بدا عدائياً، أما وجهه فكان في الواقع جميلاً إلى حد ما.</p>
+<p>كان كارلوس، الذي جعل قميصه غير المرتب يبدو وكأنه من أرقى الماركات، يزداد وسامة كلما تلاشت هالته الباردة. لو لم يكن أحد "شخصيات المهام الجانبية المخفية" في أبراج هذا العالم، لكنتُ ظننته أحد المشاهير.</p>
+<p>( ملاحظة: "شخصية المهام الجانبية المخفية" تُشير إلى شخصية داخل لعبة أو عالم خيالي، لا تظهر في المهام العادية، بل يتم اكتشافها عند القيام بخطوات خاصة أو غير معتادة.)</p>
+<p>قال: "لا يمكنني طرد ضيف تلك الفتاة، أليس كذلك؟ تفضل بالدخول."</p>
+<p>"شكرًا لك!" هل سيمنحني المكافأة داخل المنزل؟ حاولت كبت حماسي وتبعته إلى الداخل.</p>
+<p>[لكن... هناك شيء غريب في هذا المكان؟]</p>
+<p>مقارنة بمظهر المنزل من الخارج، كان داخله واسعًا بشكل غير عادي. حتى ارتفاع السقف كان مختلفًا عمّا كنتُ لأتوقعه. كما توقعت، إنه حقًا شخصية لمهمة خفية! لم يكن مظهره المميز هو الشيء الوحيد غير العادي فيه.</p>
+<p>بعد أن أجلسني في غرفة الجلوس، جلب كارلوس بعض الضيافة من مكان ما داخل المنزل. وبينما كان يقرأ رسالة فيوليتا، جلست بهدوء وأنا أتناول البسكويت الموضوع أمامي. يبدو أن ذوقه الرفيع في الطعام لا يقل عن ذوقه الجمالي الشهير — رغم أنني لست ممن يفضلون الحلويات عادة، فإن طعم البسكويت كان لذيذًا للغاية.</p>
+<p>ما إن أنهيت كامل صحن البسكويت حتى قال لي: "أنت تُدعين غاهو، صحيح؟ أجببني بصراحة، كيف حال فيوليتا الآن؟"</p>
+<p>أجبته: "لا أعرف فيوليتا جيدًا. أنا فقط على معرفة بابنتها شارلوت، وأساعدها من حين لآخر في العثور على نبتة النفل ذات الأوراق الخمس—وهي نبتة تأمل أن تستخدمها لمداواة والدتها المريضة."</p>
+<p>تمتم كارلوس مستاءً: "همم، فهمت... إنها غبية بنفس قدر والدتها."</p>
+<p>بدا كارلوس حزينًا بعض الشيء. طوى الرسالة عدة مرات ثم وضعها في جيبه الداخلي قرب صدره. يبدو أن شيئًا ما خطر بباله، إذ قال بعدها مباشرة: "شكرًا لأنك أوصلت رسالتها. سأهتم أنا بإرسال ردي بنفسي."</p>
+<p>[المهمة الخفية "رسالة فيوليتا (؟)" قد اكتملت.]</p>
+<p>‘وأين جائزتي؟’</p>
+<p>وكأن كارلوس سمع السؤال الذي لم أنطقه، فقد اصطحبني خارج غرفة الجلوس.</p>
+<p>قال لي: "بفضلك، علمتُ بحال فيوليتا الآن. لو لم تكن أنت، لما عرفت أبدًا أنها كانت مريضة حتى النهاية."</p>
+<p>لم يستطع أن يُخفي نبرة المرارة الطفيفة في صوته.</p>
+<p>وعندما وصلنا إلى باب الخروج، توقف كارلوس أمام الموقد وقال: "يجب ألا تخبري أحدًا بما سيحدث الآن. هل تعديني بهذا؟"</p>
+<p>‘كم ستكون هذه المكافأة مذهلة حتى يزرع في داخلي هذا القدر من الترقب؟’</p>
+<p>حين أومأت برأسي موافقًا، مد كارلوس يده نحو الموقد. وما إن أدار حامل الشمعة مرة واحدة، حتى خيّم الظلام على مجال رؤيتي.</p>
+<p>وفي اللحظة نفسها، انقلب الفضاء من حولنا رأسًا على عقب.</p>
+<p>انفتح فمي تلقائيًا دهشةً من هذا المنظر الغريب الذي لم أره من قبل.</p>
+<p>‘ما هذا الشخصية غير القابلة للعب؟’</p>
+<p>قال كارلوس: "هذا هو الشيء الوحيد الذي يمكنني تقديمه للاعب."</p>
+<p>اختفت غرفة المعيشة الدافئة الألوان، وظهرت مكانها غرفة ممتلئة بمختلف الأشياء.</p>
+<p>رأيت خزائن عرض مليئة بأشياء غريبة — حتى من هذه النظرة السريعة — أشياء غير مألوفة؛ وبسبب الأدوات المتدحرجة والمكدسة على الأرض، كان من الصعب عليّ أن أخطو خطوة أخرى.</p>
+<p>قال: "كل ما يُصنع هنا يكون أفضل من معظم الأشياء الأخرى. اختارب شيئًا واحدًا يعجبك من هنا."</p>
+<p>"أ... أي شيء؟"</p>
+<p>ابتسم كارلوس وأومأ برأسه على سؤالي الغبي تمامًا. الطاقة التي تصدرها كل واحدة من هذه الأدوات كانت مختلفة بشكل ملحوظ. هل ينوي حقًا أن يعطيني شيئًا من هذه الكومة؟</p>
+<p>عضضت شفتي دون وعي. رتبة "أ"؟ هذا لا يُعتبر شيئًا! كنت أظن أنه إذا بحثت جيدًا، يمكنني أن أجد شيئًا من الرتبة "س" في هذه الغرفة. من كان يظن أن مثل هذا الحظ قد يصيبني؟</p>
+<p>حتى الصيّادين من الرتبة "س" (أي أقوى وأندر المحاربين) كانوا يتمنّون الحصول على أدوات من نفس الرتبة، لأنها نادرة للغاية ولا تسقط بسهولة أثناء المعارك! هل سأجد أنا أيضًا "دجاجتي التي تبيض ذهبًا"، ويبدأ قدري بالتغيّر؟</p>
+<p>(ملاحظة: عبارة "دجاجة تبيض ذهبًا" هنا تُستخدم بدلاً من تعبير يشير إلى "مذبح بوذي"، وكلاهما يُعبّر عن الحظ العظيم أو النعمة الكبيرة، أي شيء يمكنه تغيير حياة الشخص.)</p>
+<p>شعرتُ بدقات قلبي تتسارع. "اهدئي يا يون غاهو." لا يجب أن أتحمس أكثر من اللازم؛ أخذت نفسًا عميقًا وحاولت الاسترخاء.</p>
+<p>"بهدوء وصبر... لننظر حولنا."</p>
+<p>الأشياء المعروضة في الخزائن بدت وكأنها الأثمن. كانت تتمتع بمظهر فخم يُتوقع من صانع ماهر يمتلك ذوقًا غريبًا ومميزًا.</p>
+<p>"القوس الطويل هناك؟ لا، سيكون مهدورًا عليّ. هل أختار الدرع الحديدي الكامل؟ دائمًا ما يحظى بإعجاب الجميع." عيوني كانت تتنقل في كل الاتجاهات.</p>
+<p>كارلوس ضيّق عينيه بينما كان ينتظر مني أن أختار.</p>
+<p>"أن تكون لافتًا للانتباه لا يعني بالضرورة أنه أمر جيد." هذه جملة سمعتها من قبل وطفَت فجأة إلى سطح ذهني.</p>
+<p>شعرت كأن أحدهم سكب ماءً باردًا على رأسي. يجب أن أهدأ—وإلا فسأجلب لنفسي كارثة حقيقية. كنت متحمسة لدرجة أنني كدت أقوم بحماقة.</p>
+<p>"يقولون إنك تستطيع تمييز "الكنز الحقيقي" دون أن تحتاج حتى لرؤيته."</p>
+<p>أغلقت عيني حتى لا أندفع بعجلة.</p>
+<p>بدلًا من الاعتماد على نظري، مددت طاقتي السحرية وأخذت أتحسس الأشياء من حولي. كانت كلها أدوات رائعة، كل واحدة منها، لكن عصاي السحرية شعرت بتنميل في كل مرة تلامس فيها أي أداة.</p>
+<p>بعد أن بحثت لبعض الوقت، شعرت بطاقة سحرية قوية تنبعث من مكان ما.</p>
+<p>وعندما بدأت أتحسس أكثر، ارتدت طاقتي السحرية حول أحد الأدوات. وبشكل فطري، عرفت أن هذه الأداة ليست عادية.</p>
+<p>«هذه هي!» أمسكت بخنجر كان مرميًا على جانب هذه الكومة الكبيرة من الأدوات. «سآخذ هذا.»</p>
+<p>"هل أنتِ متأكد؟"</p>
+<p>أجبت فقط بهز رأسي بعزم.</p>
+<p>بصراحة، عندما فتحت عيني، ظننت أن قدراتي قد أخطأت؛ فالخنجر في يدي كان قديمًا وعاديًّا جدًا، يمكن أن تجده في أي مكان.</p>
+<p>لكن لا يجب الاستهانة بحدس الصياد. حتى إن تعثرت في الطريق، عليك أن تغتنم الفرص إذا أردت أن تصبح عظيمًا.</p>
+<p>تمامًا عندما حاولت أن أضع الخنجر في الجرد (المخزون)، خطفه كارلوس فجأة.</p>
+<p>"ماذا؟ لماذا أعطاني إياه ثم أخذه مجددًا؟"</p>
+<p>قال: "اختر مرة أخرى".</p>
+<p>"ماذا؟"</p>
+<p>"سأعطيك واحدًا آخر، لذا اختر مجددًا."</p>
+<p>لم أكن أعرف ما أسبابه، لكن طالما أنه عرض عليّ غرضًا آخر، فلن أرفض. أغلقت عينيّ من جديد. بعد أن اخترت مرة سابقًا، صار الأمر أسهل قليلًا.</p>
+<p>"هممم، حسنًا، هذه المرة سأختار هذا!"</p>
+<p>ذلك الغرض كان يبدو "ودودًا" بما يكفي ليتقبل مانا من الدرجة C التافهة الخاصة بي — كان لدي شعور جيد حياله. مدت يدي نحو الكومة. "هذا... نظارة أحادية؟"</p>
+<p>(ملاحظة: نظارة أحادية هي عدسة واحدة تُستخدم عادة لتكبير الرؤية، توضع أمام عين واحدة فقط).</p>
+<p>كارلوس، الذي كان يحدق بي طوال الوقت، نقر لسانه متذمرًا وكأنه لا يصدقني.</p>
+<p>ظهرت رسالة من النظام لم أرها من قبل فجأة:</p>
+<p>الشخص غير القابل للعب كارلوس يطلب الاطلاع على نافذة حالتك. هل تقبل؟</p>
+<p>قال: "اقبلِ بسرعة".</p>
+<p>وافقت تلقائيًا على طلب كارلوس، لكن لاحقًا، بعدما فكرت بالأمر، نظرت إليه بدهشة: "انتظر—كيف يكون هذا ممكنًا؟"</p>
+<p>من المفترض أن الشخصيات غير القابلة للعب لا تعرف بوجود النظام أصلاً. ولم أسمع من قبل عن إمكانية طلب الإطلاع على نافذة حالة شخص آخر. توقف تفكيري تمامًا — هذا مخالف تمامًا للمنطق.</p>
+<p>"انتظر لحظة. هل يمكن أن يكون هذا…"</p>
+<p>صفة اللاعب يون قاهو، "بركة لك (C)"، تتفاعل مع صفة كارلوس، "الحدّاد (SS)".</p>
+<p>إمكانية جديدة تُفتح لصفة "بركة لك (C)".</p>
+<p>إمكانية جديدة...؟</p>
+<p>يبدو أن الأمور الغامضة تحدث دومًا واحدة تلو الأخرى؛ لم أتمكن من ترتيب أفكاري. لكن عندما رأيت نافذة الحالة الجديدة، أصبحت متأكدًا.</p>
+<p>كل هذا يشير إلى شيء واحد:</p>
+<p>قطعة خفية.</p>
+<p>(ملاحظة: قطعة خفية تعني شخصية غير قابلة للعب أو غرضًا نادرًا مخفيًا في طوابق البرج، ولا يمكن العثور عليه إلا في ظروف خاصة).</p>
+<p>القطعة الخفية، التي يُشار إليها أحيانًا بـ"مصادفة غريبة" أو "سخرية القدر العجيبة"، لا يمكن الحصول عليها إلا من خلال طريقٍ خاصٍ للغاية. وفقًا للشائعات، هناك من تمكن من تحطيم الجدران – أي تخطّي حدود مواهبهم الطبيعية – ليصبحوا صيّادين من الدرجة الأولى بفضل هذه القطع الخفية.</p>
+<p>هل من الممكن أن تكون تلك القطعة الأسطورية الخفية قد وصلت إليّ؟ أمر لا يُصدّق. لماذا أنا بالذات؟</p>
+<p>لم أستطع أن أصدق هذا التحوّل المفاجئ وغير المتوقع في قدري.</p>
+<p>سألت: "لماذا تفعل هذا؟"</p>
+<p>أجاب: "لأن لديك موهبة."</p>
+<p>قلت بدهشة: "أنا؟ الجميع يعرف كيف يستخدم سحر الاستشعار!"</p>
+<p>ضحك كارلوس بسخرية، وكأنه سمع شيئًا مثيرًا للشفقة.</p>
+<p>لم أستطع تصديق كلام كارلوس أبدًا – اكتشاف طاقة المانا (الطاقة السحرية) كان أمرًا طبيعيًا. فبمجرد أن يستيقظ الشخص (أي يكتسب قدرات سحرية)، تأتي تلك القدرة بسهولة كما لو كانت تنفسًا.</p>
+<p>"ما المميز في هذا، إذًا؟ لا يُعقل أن أحدًا لا يستطيع أن يفعل ما فعلته للتو!"</p>
+<p>قال كارلوس، غير مبالٍ باندهاشي: "هل تظن أن الحساسية تجاه المانا أمر شائع؟ لا تتفوّهِ بالهراء، وابدإ بفحص حالة المعدات التي اخترتها."</p>
+<p>تركني ومضى نحو ما يشبه شاشة الحالة خاصتي (ربما كانت نافذة الحالة السحرية؟)، وبدأ يفحص العنصرين.</p>
+<p>[أرغونوت (الرتبة: S)]</p>
+<p>(في الأساطير اليونانية، كان الأرغونوتيون جماعة من 50 بطلاً أبحروا مع "جيسون" على متن السفينة "أرغو" بحثًا عن "الصوف الذهبي").</p>
+<p>[عين فولكانوس (الرتبة: SS)]</p>
+<p>(فولكانوس – ويُعرف أيضًا باسم فولكان – هو سيد النار والحدادة في الأساطير الرومانية، ويقابله "هيفايستوس" في الأساطير اليونانية. وغالبًا ما يُصوّر في المعابد وهو يحمل مطرقة الحدّاد).</p>
+<p>الرتبة SS؟!</p>
+<p>أسرعت بالنظر إلى تصنيفات المعدات المعروضة في الخزائن، فوجدت أن معظمها من الرتبة A.</p>
+<p>ربت كارلوس على كتفي، بينما كنتُ واقفة بتعبير مذهول، وقال: "ما رأيكِ؟ هل ترغبين في التعلم؟ ستكونين نوعًا مختلفًا من الحِرفيّين عني، لأن صفاتكِ الفطرية مختلفة، لكن يمكنني أن أمهد لكِ الطريق."</p>
+<p>لقد بدأت فرصة تطوّر صفاتكِ.</p>
+<p>نعمة لكِ (الرتبة ج) ← نعمة أبدية وخالدة (الرتبة س)</p>
+<p>– مهارات إضافية (متوقعة): منح الخاصية (الرتبة ج) ← سحر التعزيز (الرتبة س) عين القناص (الرتبة ج) ← عين المستكشفة (الرتبة أ)</p>
+<p>※ بعض المهارات الإضافية التي تأتي ضمن الصفة "النعمة الأبدية والخالدة (س)" غير متاحة حاليًا للاطلاع.</p>
+<p>(ملاحظة:</p>
+<p>الرتبة ج: رتبة "جيدة" أو "عادية".</p>
+<p>الرتبة أ: رتبة عالية.</p>
+<p>الرتبة س: أعلى رتبة، وتُقارن بـ "الخارقة" أو "الأسطورية".</p>
+<p>منح الخاصية: مهارة تُكسب شيئًا ما خاصية معينة (مثل عنصـر، أو قوة).</p>
+<p>سحر التعزيز: نوع من السحر يزيد من قوة الأشياء كالسلاح أو الدرع.</p>
+<p>عين القناص: تعزز دقة الرؤية والتصويب.</p>
+<p>عين المستكشفة: مهارة تمكّن من استكشاف المناطق والكشف عن الفخاخ أو الأعداء.)</p>
+<p>انبهرتُ بالنوافذ الكثيرة التي ظهرت فور انتهاء كارلوس من الحديث.</p>
+<p>"ص... صفات من الرتبة س؟" تمتمتُ كأنني آلة معطّلة، ثم نظرتُ إلى الحداد.</p>
+<p>نظر إليّ كارلوس بابتسامة ماكرة.</p>
+<p>في كوريا، لم يكن لدينا حتى عشرة صيادين من الدرجة س. صفات من رتبة س مع احتمالية مهارات إضافية من نفس الرتبة! هذا أمر يتمناه الجميع.</p>
+<p>"هذا كافٍ لأصل إلى الرتبة أ... لا، ربما حتى الرتبة س..!"</p>
+<p>العبارة الصغيرة في نهاية رسالة النظام — التي أوضحت أنني لا أستطيع حاليًا رؤية أو استخدام بعض المهارات الإضافية — تعني أنني قد أكتسب المزيد من المهارات لاحقًا إذا تحققت شروط معيّنة.</p>
+<p>لم يكن هناك سبب يجعلني أرفض عرضه.</p>
+<p>"بالطبع...."</p>
+<p>"لكن، إن اخترتِ أن تتعلمي على يدي، فعليكِ التخلّي عن المعدّات التي اخترتِها."</p>
+<p>"ماذا؟ هذا مختلف عما قلتَه سابقًا!"</p>
+<p>"ليس من ضمن صلاحياتي أن أمنحكِ كلاً من المعدّات وصفة جديدة. أعتذر، لكن عليكِ أن تختاري بينهما."</p>
+<p>وقبل أن يُنهي كلامه، ظهرت أمامي نافذة النظام لتجبرني على اتخاذ القرار:</p>
+<p>[اختاري مكافأتكِ من المهمة الخفية: "رسالة فيوليتا."]</p>
+<p>1. أرغونوت (س)، عين فولكانوس (س س)</p>
+<p>2. تطوّر الصفة: النعمة الأبدية والخالدة (س)</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+  </html>
