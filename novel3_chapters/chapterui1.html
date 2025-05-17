@@ -1,0 +1,543 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل الأول</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/cover1.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل الأول
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل الأول</p>
+<p>امتلأ الكازينو الصاخب بالدخان. كانت رقائق القمار تُصدر صوتًا حادًا وهي تتناثر على الطاولات، معبّرة عن انتقال الثروة من يدٍ إلى أخرى. لكن ما علا فوق كل ذلك كان ضجيج الأحاديث البشرية.</p>
+<p>الأضواء كانت ساطعة في الداخل. جلس المدير متكئًا على كرسيه، مرتديًا ثيابًا تقليدية تعود إلى أسرة تانغ (وهي سلالة حكمت الصين قديمًا بين عامي 618 و907 م، وتُعرف بأناقة ملابسها). كانت سيجارة طويلة بين أصابعه، وعيناه الضيقتان تراقبان المكان المزدحم بدقة.</p>
+<p>هذا كان كازينوه، منطقته الخاصة.</p>
+<p>طالما أنه جالس هنا، فلن يستطيع أحد اختراق هذا الحصن.</p>
+<p>في هذا العالم، كان مستخدمو القدرات من الرُتب المنخفضة كثرة لا تُحصى، أما أصحاب الرُتب المتوسطة فكانوا نادرين جدًا. أما أولئك الذين بلغوا الرُتب العليا، فعددهم يُعد على أصابع اليدين.</p>
+<p>أي شخص استطاع بلوغ الرتبة المتوسطة في استخدام القدرات، كان بمقدوره فعل ما يشاء.</p>
+<p>وصاحب هذا الكازينو كان من أولئك القلة… مستخدم قدرة من الرتبة المتوسطة، وأقوى شخص في هذه المنطقة.</p>
+<p>ومع ذلك، لسببٍ ما، تجمّد في مكانه فجأة.</p>
+<p>دوّي!</p>
+<p>دُفِع باب الكازينو الخشبي بركلةٍ عنيفة. ارتفعت سُحبٌ من الغبار والدخان في الهواء، وتجمدت الأجواء المزدحمة في لحظة. ساد صمت تام لدرجةٍ أنك كنت لتسمع سقوط دبوس على الأرض.</p>
+<p>التفت الزبائن والموظفون بشكل لا إرادي نحو مصدر الصوت. ومن خلال سُحب الدخان، ظهرت ظلٌّ أسود يتقدم بخطى هادئة، كأنه يسير في فناء منزله.</p>
+<p>شهق أحدهم من شدّة الصدمة.</p>
+<p>كان جميع من في المكان من الزبائن الدائمين. صحيح أنهم رأوا أشخاصًا تجرأوا على التصرّف بتكبّر هنا من قبل. الغرباء الذين لم يكونوا يعرفون القواعد غالبًا ما كانوا يتطفّلون على كازينو الزعيم. ومع ذلك، كان هذا المكان هو الأشد أمانًا والأكثر موثوقية في المنطقة، ولهذا سببٌ وجيه. إذ لم يكن ينتظر من يسيء الأدب سوى موت سريع ينفّذه الزعيم بقدرته الخاصة.</p>
+<p>لم يكن يُعرف الكثير عن قدرة الزعيم، لكن المؤكد أنها من نوع "المجال".("المجال" هو نوع من القدرات الخارقة يتيح لحامله السيطرة التامة على مساحة معينة. وتُستخدم كثيرًا في سياقات الفانتازيا أو القصص ذات القوى الخارقة.)</p>
+<p>أي أنه يصبح ملكًا مطلقًا داخل مجاله، بإمكانه أن يسلب أي حياة يشاء داخل حدوده.</p>
+<p>على الأقل، هذا ما كان يُفترض أن يحدث.</p>
+<p>ومع ذلك، فإن القادم الجديد ما زال واقفًا! بل ويتجول بكل أريحية!</p>
+<p>كان الباب الملقى على الأرض يُمثّل فعليًا سمعة الزعيم. يئنّ بصوتٍ مزعج، مهدّدًا بالتحطّم تحت وطأة كل خطوة تسحقه.</p>
+<p>"سمعت إن هوا يي تشي كان موجودًا هنا؟" جاء صوت القادم الجديد، شابًا بشكلٍ مذهل.</p>
+<p>وبدأ مظهره يتضح تدريجيًا وسط الدخان.</p>
+<p>شعره الأسود يتدلّى بلا مبالاة على كتفي معطفه الأسود العملي الطويل. حزامه الرفيع الطويل يتأرجح في الهواء بحرية. خصلات شعره الفوضوية ونظاراته الشمسية الضخمة أخفت معظم ملامحه، ولم تُظهر سوى شفتيه المرتفعتين قليلًا.</p>
+<p>طوق أسود، بعرض إصبعين، كان يخفي تفاحة آدم في عنقه.</p>
+<p>ورغم أنه سأل عن مكان ذلك الشخص، أدار الشاب رأسه بهدوء، موجّهًا نظرته – التي اخترقت حتى نظاراته – مباشرةً نحو الزعيم.</p>
+<p>كان سبب مجيئه واضحًا تمامًا.</p>
+<p>نهض الزعيم، المعروف أيضًا باسم "هوا ييتشي"، ببطء. دار الولاعة دورة واحدة بين أطراف أصابعه النحيلة قبل أن يضعها جانبًا. أضاءت ملامحه ابتسامة مشرقة.</p>
+<p>قال بابتسامة: "يبدو أن ضيفنا الكريم هنا سريع الغضب." وأشار بأدب إلى الشاب ليتبعه إلى الغرفة التالية.</p>
+<p>دخل الشاب دون أي تردد.</p>
+<p>ربما لم يكن هناك سبب يدعوه للحذر. فمجرد أنه ما زال حيًا داخل منطقة نفوذ الزعيم يعني أنه يمتلك قدرة خارقة أقوى من الزعيم نفسه!</p>
+<p>لا أحد يجرؤ على استفزاز هؤلاء أصحاب القوى العظمى، فالثمن يكون حياتهم.</p>
+<p>في هذا العالم، مستخدمو القدرات الخارقة يستطيعون القتل دون أن يتحملوا أي عواقب.</p>
+<p>أُغلِق الباب، منهياً هذه الفاصلة الغامضة. وعادت الكازينو إلى العمل كالمعتاد بعد لحظة صمت قصيرة.</p>
+<p>جاء موظفان فقط لإزالة الباب المحطم وتركيب آخر جديد.</p>
+<p>وسرعان ما بدا الأمر وكأن شيئًا لم يحدث. …</p>
+<p>كان مصباح كيروسين  هو مصدر الضوء الوحيد في الغرفة المعتمة.</p>
+<p>بعد أن استدار وجلس خلف المكتب، دعا الزعيم ضيفه للجلوس مقابله.</p>
+<p>كان هذا هو السر وراء الكازينو، المكان الذي يدير فيه الزعيم مهنته الثانية.</p>
+<p>لم يكن مجرد مالكٍ لكازينو، بل كان أيضًا يعمل كمُزوِّد معلومات بدوام جزئي.</p>
+<p>كلمة السر المرتبطة بمهنته الثانية؟ ذلك الاسم: هوا ييتشي. (ملاحظة: "هوا ييتشي" هو اسم شخص أو لقب يستخدم كرمز أو هوية في عمله كمزوِّد معلومات.)</p>
+<p>"تفضل بالجلوس، أيها الضيف الكريم."</p>
+<p>رفض الشاب الشاي الذي قُدم له بمجرد إشارة من يده.</p>
+<p>نظر الشاب ذو الشعر الداكن إلى الفراغ أمامه ثم قال: "أريد موقع 'تانغ'."</p>
+<p>كان هناك عد تنازلي لا يراه سواه معلق في الهواء.</p>
+<p>[عنصر [قدرة المناعة (3 دقائق)] العد التنازلي: 01:12]</p>
+<p>(ملاحظة: "قدرة المناعة" تعني قدرة مؤقتة تحميه من الضرر أو التأثيرات السلبية، تستمر لمدة ثلاث دقائق.)</p>
+<p>الشاب... لا، "هو" لم يكن الشخص القوي كما يظنه الآخرون، تمامًا كما أنها لم تكن رجلًا في الحقيقة.</p>
+<p>على النقيض من غرورها المتصنع اللامبالي، كانت كل شعرة في جسد لونا منتصبة من التوتر.</p>
+<p>أما الزعيم الجالس أمامها، فكان يبتسم بهدوء دون أي تعبير حقيقي. هل انطلت عليه خدعتها أم لا؟</p>
+<p>كان يُعد مستخدمَ قدراتٍ متوسطَ الرتبة في المانهوا ما بعد الأسود والأبيض، يتمتع بقدرة مزعجة من النوع "نطاقي" (أي قدرة تؤثر على منطقة كاملة). كان الكازينو بأكمله خاضعًا لسيطرته.</p>
+<p>للأسف بالنسبة لـ  لونا، فقد أُلقي بها فجأة في هذا العالم دون أن تملك أي قدرة، مما جعلها هدفًا سهلًا بلا حماية.</p>
+<p>كانت لونا في العالم العادي العلمي الواقعي قبل ساعة فقط.</p>
+<p>ماتت بسبب الإرهاق الشديد بعد أن قضت ثلاث ليالٍ متواصلة تُجهد نفسها في مراجعة أطروحتها (رسالة تخرجها الجامعية).</p>
+<p>لحسن الحظ، عثر عليها النظام ومنحها الفرصة لتجربة الإحساس الغريب بانخفاض حرارة جسدها (في إشارة إلى لحظة الموت).</p>
+<p>> [مرحبًا. هذا النظام قادر على منحك فرصة ثانية للحياة.]</p>
+<p>"ما الثمن؟" سألت لونا.</p>
+<p>فهي لم تكن تؤمن بأن هناك شيئًا مجانيًا في الحياة. إذا أردت شيئًا، فعليك أن تكون مستعدًا لدفع المقابل.</p>
+<p>لم يُراوغ النظام في الرد.</p>
+<p>> [هذا النظام مخصص فقط لعالم المانهوا ما بعد الأسود والأبيض. ستكون هناك عملية تبادل متكافئة لقاء هذه الصفقة.]</p>
+<p>> [قد تحتاجين إلى الانتقال إلى عالم المانهوا ما بعد الأسود والأبيض مرة واحدة يوميًا، واستخدام الشهرة التي تجمعينها داخل المانهوا لتبديلها بنقاط البقاء.]</p>
+<p>> [سيقدم النظام لك المساعدة في الأسبوع الأول فقط، وبعد ذلك عليكِ الاعتماد على مجهودك الخاص.]</p>
+<p>> [يمكنكِ استبدال الشهرة العالية بنقاط البقاء، والتي تُستخدم لتمديد مدة بعثك للحياة.]</p>
+<p>(نقاط البقاء: تمثل مقياسًا لبقائها على قيد الحياة في هذا العالم الجديد؛ كلما جمعت شهرة أكثر، زادت فرص استمرارها في الحياة.)</p>
+<p>لقد قرأت لونا المانهوا التي ذكرها النظام من قبل. كانت زميلتها في السكن من المعجبات المخلصات بها، وغالبًا ما كانت تجرّها لكتابة القصص المعجبين بها.</p>
+<p>كانَت أحداث المانهوا تدور في عالمٍ إمبراطوري النزعة. حيث وُجدت قوى عظمى تحمي العائلة المالكة، ونبلاء يملكون قدرات خارقة تنتقل عبر الأجيال، وجمعية تُسمى "رابطة مستخدمي القدرات" كانت تحمي أصحاب القدرات الضعيفة ظاهريًا فقط، بينما كانت في السر تطيع أوامر النبلاء. كما وُجد أفرادٌ خارقون مستقلون لا يتبعون لأحد. هذه الفئات المختلفة شكّلت الطبقة العليا لهذا العالم.</p>
+<p>في هذا العالم، كان الأقوياء يستغلون الضعفاء، وكانت القوة محصورة في يد الطبقة العليا. لم تكن هناك قوانين أو عدالة، بل كانت القاعدة الوحيدة: "القوة تصنع الحق". وكان مستخدمو القدرات الأقوياء يستعبدون من هم أضعف منهم، حتى أن حياة الضعفاء منهم كانت أسوأ من حياة المدنيين العاديين الذين لا يمتلكون أي قدرة.</p>
+<p>كان البطل يواجه تحديات لا حصر لها وهو ينشأ في هذا العالم القاسي، باحثًا عن أي أثر لوالده بالتبني. قد تشرق الشمس في الأماكن التي يمر بها، لكن العظام البيضاء تظل مكدسة في الظلال.</p>
+<p>ارتجف جسد لونا فجأة. إن كان النظام قادرًا على التواصل معها، فقد يكون قادرًا على التواصل مع أشخاص آخرين أيضًا. فكم عدد الأشخاص من العالم الحقيقي الذين يتجولون في هذه المانهوا؟</p>
+<p>نحن لا نتحدث عن قصة خفيفة مليئة بالكوميديا والحياة اليومية، بل عن مانهوا يموت فيها الناس فعلاً عندما يُقتلون.</p>
+<p>هل مات أشخاص من العالم الحقيقي هناك قبلها؟</p>
+<p>سألت لونا: "هل يوجد أشخاص آخرون غيري هناك؟"</p>
+<p>[بإمكانك البحث عن الإجابة بنفسك.]</p>
+<p>حاولت لونا بغريزتها أن تنقر بإصبعها السبابة، قبل أن تتذكر أنها ميتة بالفعل.</p>
+<p>بصراحة، هذا الإحساس كان الأسوأ.</p>
+<p>كانت لونا تعلم أنه لا خيار أمامها. إن رفضت، فستعثر زميلتها في السكن على جثتها في السرير صباح الغد. ثم ستبدأ القصص بالانتشار، مثل: "طالبة أخرى تموت في جامعة (كذا)"، وسيتداولها الناس في المنتديات الجامعية أو الصحف الصفراء. وربما يستغل أحدهم موتها لانتقاد طلاب الجامعات في العصر الحديث. وربما لا يُذكر اسمها حتى، وتُعرف للأبد بلقب "الطالبة الميتة (أ)".</p>
+<p>لن يفهم أحدٌ أفكارها، أو أهدافها، أو الشخص الذي كان بإمكانها أن تصبحه.</p>
+<p>وعلى الرغم من أنها كانت تعلم جيدًا أنها لن تكون موجودة لتقلق بشأن ذلك لاحقًا، إلا أن لونا لم ترغب في أن تموت بهذه الطريقة.</p>
+<p>وهي تدرك تمامًا أن هذا أقرب ما يكون إلى فخ، قالت: </p>
+<p>"سأفعلها."</p>
+<p>لم تكن تعرف ما ينتظرها، لكنها كانت متأكدة أنه لا يمكن أن يكون أسوأ من الموت الآن.</p>
+<p>كان عليها أن تخوض هذه المجازفة مهما كلف الأمر.</p>
+<p>عندها أعلن الصوت الآلي البارد للنظام انتهاء الصفقة:</p>
+<p>[تمت الصفقة. جاري الاستعداد للانتقال الأولي.]</p>
+<p>[تم إنشاء القناة. نتمنى أن تصبحي شخصية شهيرة تنفخ الحياة من جديد في المانهوا.]</p>
+<p>…</p>
+<p>بالعودة إلى الحاضر، كانت لونا تحدّق في الزعيم بنظرة باردة. جلست بكبرياء واضح، وساق فوق الأخرى بينما اتكأت إلى الوراء على كرسيها.</p>
+<p>ومع ذلك، كان قلبها يكاد ينفجر من صدرها، حيث تدفق الأدرينالين في عروقها بجنون.</p>
+<p>لم يسبق لها أن كذبت بهذا الشكل الصريح طوال سنواتها التسعة عشر. والأسوأ أن من كانت تكذب عليه ليس شخصًا عاديًا، بل مستخدم قوى من المستوى المتوسط، ظهر في المانهوا، وهو شخص قتل عددًا لا يحصى من الناس.</p>
+<p>كانت تعرف جيدًا أنها إن أظهرت أي توتر، فستنفضح.</p>
+<p>لم يكن مسموحًا لها أن تُظهر أي ضعف.</p>
+<p>قال الزعيم بعد لحظة من التفكير وهو يبتسم باستهزاء: ""تانغ"؟ يبدو أن ضيفنا المحترمة على قدر عالٍ من الاطلاع."</p>
+<p>كان للزعيم عادة في نطق كلماته ببطء وتثاقل، كما كان يفعل الناس في الأزمنة القديمة.</p>
+<p>لكن هذه العادة الصوتية كانت تتحول بسرعة إلى المسمار الأخير في نعش لونا. فكلما أبطأ في الحديث، كلما قلّ الوقت المتبقي لها.</p>
+<p>العنصر الذي كانت تستخدمه كان وسيلتها الوحيدة للمساومة.</p>
+<p>أما ما يسمى بـ"مساعدة النظام"، فلم يكن أكثر من مجرد مركز تسوق. نعم، كان يحتوي على مجموعة واسعة من العناصر، لكن العملة الوحيدة المقبولة فيه كانت "نقاط النجاة" (نقاط النجاة هي وحدة افتراضية يستخدمها النظام لشراء الأشياء، وتُكتسب غالبًا من خلال البقاء حيًا في مواقف خطيرة).</p>
+<p>وقد كلّفها هذا العنصر كل ما كانت تملكه من نقاط في البداية. بمعنى آخر، لم يكن بإمكانها شراء شيء آخر.</p>
+<p>إذا خسرت هذه المغامرة، ستموت. لن تكون هناك فرصة ثانية.</p>
+<p>ومهما بدت هادئة، فقد كانت هذه أول مرة تشارك فيها لونا في تعاملات تحت الأرض.</p>
+<p>فهي في النهاية لم تكن سوى طالبة عادية قبل أن يحدث كل هذا.</p>
+<p>ارتفع نبرة صوتها قليلًا وهي تقول: "ألا تعرف؟"</p>
+<p>كانت تعرف أنه يعرف، لأن بطل المانهوا سمع هذه المعلومة منه بالذات.</p>
+<p>ومع ذلك، قال الزعيم بنبرة متراخية: "النزاهة هي العمود الفقري لمجال عملي. لقد بِعتُ المعلومات بالفعل لشخصٍ آخر."</p>
+<p>فسألته لونا بإصرار: "وأين هذا الشخص إذًا؟"</p>
+<p>كانت تروس عقلها تدور بجنون تحت تأثير الأدرينالين. النظارات الشمسية التي كانت تغطي نصف وجهها جعلت ابتسامتها الجامدة تبدو أكثر صدقًا.</p>
+<p>ومع ذلك...</p>
+<p>قال الزعيم فجأة: "تبدو على عجلة من أمرك، أيها الضيف المحترم."</p>
+<p>انتفضت لونا.</p>
+<p>كانت تعرف تمامًا العواقب إذا انكشفت، فهي قد قرأت ذلك في المانهوا.</p>
+<p>ستسقط وتتحطم كقطعة زجاج، وتتحول إلى بقعة حمراء مؤقتة على أرضية الكازينو المظلمة.</p>
+<p>فالزعيم، بصفته مستخدمًا لقدرات متوسطة المستوى وسمسار معلومات في هذه المنطقة، لم يكن شخصًا خيّرًا.</p>
+<p>كان يقتل كل من يجرؤ على إهانته.</p>
+<p>تبقّى فقط 43 ثانية.</p>
+<p>مغادرة الكازينو دون إثارة الشكوك ستستغرق 30 ثانية، ما يعني أن أمام لونا 13 ثانية فقط.</p>
+<p>بل 12 ثانية الآن.</p>
+<p>اعتدلت في جلستها، وأنزلت ساقها المتقاطعة بضربة ثقيلة.</p>
+<p>قالت بنبرة ساخرة: "هل أنت مهتم بدوافعي؟ أم أنك فقط لا تريد كشف السر؟"</p>
+<p>شعرت لونا وكأنها تستخرج كل مهارات التمثيل التي امتلكتها في حياتها في تلك اللحظة.</p>
+<p>هل كانت خائفة؟ بالطبع، لكنها لم تكن تملك خيارًا آخر.</p>
+<p>ثوانٍ تمرّ، وابتسامة الزعيم الخفيفة بقيت ثابتة كالقناع.</p>
+<p>لم تستطع أن تفسر ما إذا كان هناك شيء ما في الأسفل... أو لا شيء على الإطلاق. كان قلبها ينبض بإيقاع متقطع وسريع داخل صدرها.</p>
+<p>كان الصوت الذي يعلن العد التنازلي لانتهاء صلاحية العنصر يرنّ في أذنيها.</p>
+<p>ثماني ثوانٍ متبقية.</p>
+<p>سبع.</p>
+<p>ست.</p>
+<p>…</p>
+<p>واحدة.</p>
+<p>لقد فات الأوان.</p>
+<p>الطريقة الوحيدة للبقاء على قيد الحياة الآن، كانت القضاء على "الزعيم" خلال الثلاثين ثانية المتبقية، ثم الفرار بأقصى سرعة!</p>
+<p>لمحة من الجنون ظهرت في عيني لونا السوداوين كظلام الليل.</p>
+<p>وفي اللحظة ذاتها، تحدث الزعيم.</p>
+<p>"أرجوك، لا تغضب، أيها الضيف المحترم."</p>
+<p>بدت الأجواء الخانقة وكأنها تلاشت فجأة.</p>
+<p>وقف الزعيم مرتديًا رداء من طراز أسرة تانغ، وعلى شفتيه ابتسامة شيطانية. أخرج ورقة، وانحنى ليكتب عليها عنوانًا.</p>
+<p>قال وهو يعطيها الورقة: "اعتبر هذا اعتذارًا مني". ثم تابع: "ونصيحة صغيرة: هناك الكثير من الوحوش القديمة تتربص في هذه المدينة. أنت ما زلت شاب، وقد يكون من الأفضل أن تسيطر قليلًا على رغبتك في القتل."</p>
+<p>وضعت لونا الورقة في جيبها، وخرجت مباشرةً كما لو أنها لا ترغب في تبادل الحديث.</p>
+<p>كان أمامها 20 ثانية لمغادرة هذا الكازينو لتكون بأمان.</p>
+<p>دفعت الباب لتفتحه وكان أمامها 15 ثانية متبقية.</p>
+<p>استمر الزعيم بالكلام من خلفها: "الكثير من الناس وجدوا مثواهم الأخير هنا."</p>
+<p>خمسة ثوانٍ متبقية. استدارت وتوجهت نحو المدخل الرئيسي الذي تم إصلاحه.</p>
+<p>"وأيضًا..." وصل صوت الزعيم من خلفها.</p>
+<p>وفي اللحظة الأخيرة، عبرت العتبة.</p>
+<p>"مرحبًا بكِ... في ’تنين الخراب‘."</p>
+<p>ظهر إشعار من النظام بمجرد أن غادرت لونا الكازينو:</p>
+<p>[عد تنازلي للعنصر [قدرة المناعة (3 دقائق)]: 00:00]</p>
+<p>غادرت لونا هذا المكان على الفور، واندمجت مع الظلام. …</p>
+<p>[جارٍ فتح القناة… مرحبًا بعودتكِ إلى العالم الحقيقي.]</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+</html>
