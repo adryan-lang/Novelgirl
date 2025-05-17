@@ -1,0 +1,524 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل الأول</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/cover2.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل الرابع
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل الرابع</p>
+<p>"مرة أخيرة فقط... تجربة واحدة أخيرة."</p>
+<p>بعد أن أهدرتُ ملايين الوُن (العملة الكورية)، فلن يضرني خسارة القليل الإضافي.</p>
+<p>وحين التقطتُ العصا التي كانت تتدحرج في زاوية السرير، صدر صوت تنبيه من ساعتي الخاصة بالصيادين.</p>
+<p>[تم رصد حقل طارئ. يُرجى التجمّع في غرفة الانتظار رقم 1 خلال 15 دقيقة.]</p>
+<p>يا لسوء الحظ. من بين كل الأوقات، يتم استدعائي الآن لحالة طوارئ.</p>
+<p>تمتمتُ بتذمّر، ثم خزّنتُ عصا الياقوت في حقيبة المعدات. فاختياري لخدمة الطوارئ نادر الحدوث.</p>
+<p>الحُقول التي تظهر بشكل مفاجئ تُحدث ما يُعرف بـ"الفيضان" — أي أنّ الوحوش تخرج من البوابة وتنتشر إذا لم تُنجز الأهداف خلال الوقت المحدد.</p>
+<p>المهمة الرئيسية للصيادين من المستويات المتوسطة والدنيا مثلي هي القضاء على هذه الحقول.</p>
+<p>أما غزوات "برج العالم" الشهيرة والتي غالبًا ما يُربط بها اسم الصيادين، فكانت من اختصاص "فرق الغزو" النخبوية. ونادرًا ما يتم استدعاؤهم لمثل هذه المهام.</p>
+<p>"أولئك مشغولون كثيرًا بالمهمات الكبرى، فلا وقت لديهم لمثل هذه الأمور السخيفة."</p>
+<p>"ترى، من هم الزملاء التعساء الذين سأعمل معهم اليوم؟"</p>
+<p>فلنرَ... الجرعات العلاجية كافية، والمعدات خضعت للإصلاح. ممتاز.</p>
+<p>"جهّزي العتاد."</p>
+<p>وفي لحظة، تحوّلت ملابس المنزل المريحة التي كنت أرتديها إلى زيّ القتال.</p>
+<p>رغم أنني اعتدتُ عليه، تأكدتُ من مظهري مرة أخرى تحسبًا لأي طارئ.</p>
+<p>كان عبارة عن قميص ضيّق بأكمام قصيرة، وسروال بجيوب متعددة، وسترة خفيفة مضادة للرياح، وحزام معدات، وجزمة قتالية.</p>
+<p>جميع القطع كانت باللون الأسود القاتم، لأنها من المعدات الرسمية الأساسية، ولم يكن هناك أي لون يبرز سوى الجعبة والقوس.</p>
+<p>بينما كان بعض الصيادين المشهورين من ذوي الرتب العالية يخصصون عتادهم ليُعبّر عن نمط معيّن أو مفهوم خاص، كان ذلك مجرد حُلم بعيد المنال بالنسبة لي.</p>
+<p>وحين علّقتُ القوس على ظهري واتجهتُ إلى غرفة الانتظار، بدأتُ أحاول تخمين من سيكون ضمن فريقي هذه المرة.</p>
+<p>"معظم أصدقائي في إجازة اليوم."</p>
+<p>مجرد التفكير في دخول حقل طارئ مع أشخاص لا أرتاح في العمل معهم، بدأ يسبب لي صداعًا.</p>
+<p>◆◇◆◇◆</p>
+<p>[تم تأكيد حضور الصيادة "يون غاهو" من أعضاء النقابة.]</p>
+<p>رنّ جرس إلكتروني: دينغ!.</p>
+<p>وبينما كنتُ أدخل غرفة الانتظار دون تركيز، سقط شيء من السقف بصوت يشبه رنين الجرس.</p>
+<p>"شخص؟!"</p>
+<p>انتظري، لماذا سقط شخص من السماء؟!</p>
+<p>كانت فتاة تبدو في منتصف سن المراهقة، ترتدي فستانًا مستوحى من الزيّ الكوري التقليدي "الهانبوك"، وبدأت تدور حولي بحيوية.</p>
+<p>"فاجأتُكِ، أليس كذلك؟!"</p>
+<p>ثم قال صوت من كتفها:</p>
+<p>"تاييانغ، قومي بالتحية! يجب أن تُسلّمي على السيد كيم أولًا. أم أنك تريدين أن أوبّخك؟!"</p>
+<p>على كتف الفتاة، التي كانت ضفائرها على شكل كعكتين دائريتين، كانت تجلس جرس صغير بحجم ظفر الإصبع. وكان الجرس يقفز صعودًا وهبوطًا، وكأنه يوبّخها.</p>
+<p>"ما هذا الشيء؟!"</p>
+<p>ورغم أنها بدت منزعجة، انحنت الفتاة احترامًا بطريقة رسمية.</p>
+<p>"سوري تُزعجني طوال الوقت. مرحبًا، أنا تشا تاييانغ. عمري سبعة عشر عامًا. انضممتُ مؤخرًا. آه، و... صحيح! قالوا إنني من رتبة (أ) كصيادة."</p>
+<p>'وميزتها كذلك من رتبة (أ)!'</p>
+<p>"آه صحيح، هذه... الميزة الخاصة بالشهر الثالث عشر..."</p>
+<p>أسرعتُ إلى تغطية فم "تشا تاييانغ"، فبدت متفاجئة من حركتي المفاجئة وعبست أنفها بانزعاج.</p>
+<p>كانت تحاول أن تُفصح عن اسم ميزتها الخاصة أمام غريبة عنها — من الواضح أنها لا تعرف شيئًا عن القواعد الأساسية. لماذا لم يُخبرها أحد بهذه الأمور المهمة؟!</p>
+<p>"الصيادة تشا تاييانغ، ربما لا تعرفين هذا لأنكِ جديدة، لكن لا يجب أبدًا أن تخبري أحدًا باسم ميزتك. حتى أعضاء النقابة لا يُستثنون من هذا."</p>
+<p>"حتى مجرد ذكر الاسم؟"</p>
+<p>"لا. إلا إذا كنتِ تثقين بالشخص تمامًا."</p>
+<p>أومأت "تشا تاييانغ" برأسها، وقد بدا أنها فهمت الأمر. وشعرتُ بالراحة لأنها كانت ذكية كما توحي عيناها الجادتان.</p>
+<p>سبعة عشر عامًا، أليس كذلك؟ بالكاد بلغت السنّ الذي يُسمح فيه بالمشاركة في نشاطات الصيادين.</p>
+<p>إنها مقبلة على طريق صعب، ولا يسعني إلا أن أشعر بالشفقة عليها.</p>
+<p>"شكرًا لأنكِ علمتِني."</p>
+<p>"السيد الطيب كيم، شكرًا!"</p>
+<p>"ليس اسمي السيد كيم، بل يُن غاهو."</p>
+<p>"العفاريت يسمّون كل البشر (السيد كيم)."</p>
+<p>عفريت؟ كنتُ أظن أنه مجرد غرض غريب، لكنه في الواقع كان عفريتًا!</p>
+<p>لم أستطع إخفاء دهشتي، فقام العفريت بتنقية حلقه. رغم أن الأشياء الغريبة أصبحت مألوفة منذ ظهور برج العالم، إلا أن وجود العفاريت لا يزال أمرًا صادمًا.</p>
+<p>مسحت "تشا تاييانغ" العفريت بإصبعها السبابة، ثم عبثت في جيبها وأعطتني قطعة من حلوى الـ"ياكغوا" (ملاحظة: ياكغوا نوع من الحلوى الكورية التقليدية المصنوعة من العسل والدقيق، وتتميز بقوامها المقرمش وطعمها الحلو).</p>
+<p>"إذًا، أنتِ أيضًا صيادة، أختي الكبرى؟"</p>
+<p>أومأت برأسي وأخذت قضمة من الحلوى. ارتسمت على وجه "تشا تاييانغ" ابتسامة كبيرة.</p>
+<p>"لكن لماذا تخاطبيني بصيغة الاحترام؟ أوه، هل يمكنني مناداتك بأختي الكبرى؟ إلى أين سنتوجه في هذا التجمع؟ هل تحبين ياكغوا أيضًا؟"</p>
+<p>"تعرفين، أنتِ أول صيادة أتحدث معها غير الساحرة أختي الكبرى!"</p>
+<p>بدأت "تشا تاييانغ" تُلقي عليّ الأسئلة دون توقف. ورؤيتها المتحمسة ذكرتني بأيام بداياتي، مما جعلني أتحدث أكثر من المعتاد.</p>
+<p>"نحن جميعًا صيادون. العمر ليس مهمًا كثيرًا بين الصيادين، بل الرتبة هي الأهم. أوه، انتبهي، هذه سهم حقيقي، لا تمسكي به هكذا..."</p>
+<p>حاولت أن أمنعها من الوصول إلى جعبتي، لكن بعد أن تذكرت أنها من الرتبة أ، تركتها تفعل ما تشاء.</p>
+<p>قذفت تشا تاييانغ السهم الذي أعطيتها إياه وأمسكته، لكن عينيها تلألأتا عندما شرحت لها عن "الميدان الطارئ".</p>
+<p>الميادين الطارئة أصعب من الميادين التي تُوثق جيدًا داخل برج العالم، أو الميادين الثابتة التي تظهر بشكل دوري في مناطق معينة.</p>
+<p>ومع ذلك، عندما رأيت شخصًا بهذا الجهل يُرسل إلى هنا، فربما لم يكن الميدان من الرتب العالية. ربما رتبة ج فقط؟ وهذا نوع من الرحمة.</p>
+<p>بينما كنت أتحدث مع تشا تاييانغ، دخل ثلاثة أشخاص إلى غرفة الانتظار.</p>
+<p>باستثناء رجل واحد يبدو في العشرين من عمره بالكاد، تعرفت على الباقين جميعًا.</p>
+<p>الأشقر هو "سو يونغ-وون"، وهو من رتبة أ ويشتهر بكونه قوي التحمل ولكنه صعب المراس، وبجانبه نائب قائد النقابة "هوانغ جاي-هي". شخص بمكانة "هوانغ جاي-هي" لن يكون في الميدان، لذا من المحتمل أنه هنا لتلقي التعليمات.</p>
+<p>"هل من الضروري حقًا أن يتم استدعاؤنا لميدان من رتبة ج؟"</p>
+<p>"الميدان قرب مبنى الجمعية الوطنية في يوييدو. أنت تعرف مدى تشدد المسؤولين الكبار."</p>
+<p>"آه، مع ذلك... مبتدئان لم يدخلوا برج العالم حتى، وواحد من رتبة ج فقط. ألا تعتقد أن هذا كثير؟ أتعلم أنكم استدعيتوني خصيصًا لأغطي على هؤلاء؟"</p>
+<p>حقًا، بهذه العفوية تجعل حامل رتبة ج يشعر بالسوء.</p>
+<p>الكثير من الناس لا يحبون العمل مع سو يونغ-وون بسبب سلوكه.</p>
+<p>تشا تاييانغ، التي كانت تقف بجانبي، زمجرت من نظراته المتعجرفة الواضحة.</p>
+<p>"لن أعيقك، يا سونباي! لقد تخرجتُ في مقدمة دفعتي من أكاديمية صيادي سول!"</p>
+<p>"المتدرب جو سونغ-هيون، رجاءً عدل طريقة مخاطبتك. من تقصد بـ'سونباي'؟"</p>
+<p>(ملاحظة: "سونباي" تعني شخص أقدم منك في نفس المجال، تستخدم كنوع من الاحترام بين الزملاء.)</p>
+<p>"لماذا تهاجم شخصًا قابلته للتو، يا سيدي!"</p>
+<p>"لقد سمعت الكثير عنك، يا سونباي. لطالما أعجبت بك..."</p>
+<p>كان الأمر فوضى، مع تداخل الجميع، حتى غول تشا تاييانغ كان يهاجم سو يونغ-وون.</p>
+<p>هل سأشارك في ميدان مع هؤلاء؟ لا شكرًا.</p>
+<p>هوانغ جاي-هي، الذي كان يرتدي تعبيرًا يشبه تعبي، هز رأسه واقترب مني.</p>
+<p>"في هذه الظروف، يا صيادة يون غاهو، عليك أن تتولي دور قائد الفريق."</p>
+<p>"ماذا؟ هل هذا ضروري حقًا؟ ألم يكن من الأفضل أن يتولى سو يونغ-وون، وهو من رتبة أ..."</p>
+<p>"أنت تعرف جيدًا العواقب السيئة لوجود قائد فريق ضعيف اجتماعيًا، أليس كذلك؟"</p>
+<p>على الرغم من كلامهم السيئ عنه بسبب نقص مهاراته الاجتماعية، لم يتأثر سو يونغ-وون. هل هذا يعني أنه واعٍ بسلوكه السيء رغم طبعه السيء؟</p>
+<p>رؤية وجهي الشاحب، بقي هوانغ جاي-هي ثابتًا.</p>
+<p>"لا حاجة للشعور بالضغط. بسبب موقع المهمة، كان لا بد من تحريك سو يونغ-وون، لكن الميدان لا يزال من رتبة ج."</p>
+<p>رغم قلة خبرتهما، فإن صيادة تشا تاييانغ وجو سونغ-هيون يحملان رتبة أ. جو سونغ-هيون، كونه من الأكاديمية، لديه خبرة في الميادين.</p>
+<p>"… ما نوع الميدان؟"</p>
+<p>"إنه هجوم منسق (غارة). يجب أن تجد وتقتل زعيم الميدان قبل انتهاء الوقت المحدد."</p>
+<p>ثلاثة من رتبة أ وواحد من رتبة ج لميدان من رتبة ج، والهجوم المنسق هذا - التشكيلة كانت منطقية. قبلتُ على مضض دور قائد الفريق.</p>
+<p>وجه هوانغ جاي-هي، الذي بدا متعبًا، ابتسم قليلاً.</p>
+<p>هذه المهمة هي ميدان من رتبة ج يسمى "حديقة الساحر".</p>
+<p>الوقت المحدد هو ثماني ساعات، وهو وقت طويل إلى حد ما. وبحسب اسم الميدان، من المتوقع وجود وحوش من نوع النباتات.</p>
+<p>وحوش نوع النباتات، خاصة في ميدان من رتبة ج، غالبًا ما تكون ثابتة في مكانها. كانت فرصة جيدة لتشا تاييانغ وجو سونغ-هيون لاكتساب الخبرة بأمان نسبيًا.</p>
+<p>"ماذا؟ يوييدو قريب. لماذا لا نركض إلى هناك؟ سيكون أسرع."</p>
+<p>"استخدام القدرات داخل المدينة غير قانوني."</p>
+<p>"يا له من تقليدي. لا أحد سيرانا في الليل على أي حال."</p>
+<p>دفعت هوانغ جاي-هي جو سونغ-هيون المتذمر إلى المقعد الخلفي. جلس سو يونغ-وون في المقعد الأمامي بجانب السائق، على الجانب المقابل لجو سونغ-هيون.</p>
+<p>الوحيدة المتبقية كانت تشا تاييانغ، لكنها بعمر سبعة عشر عامًا، فلا يمكنها القيادة.</p>
+<p>'أعتقد... عليّ أن أقود.'</p>
+<p>ترددتُ لكن توليت القيادة.</p>
+<p>"لماذا لا نعرف بعضنا قبل أن نصل؟ أنا يون غاهو، قائد فريقكم. سلاحي الرئيسي هو القوس، وترتيبي العام هو ج."</p>
+<p>"أوه، لماذا يكون شخص مثلك في هوانغيا..."</p>
+<p>"أنا تشا تاييانغ! قلت أني من رتبة أ، وتخصصي فنون القتال!"</p>
+<p>"مهلاً، كنت أتحدث!"</p>
+<p>من كان يظن أن حتى التعارف سيكون صعبًا بهذا الشكل؟</p>
+<p>الأولاد في المقعد الخلفي بدأوا يتشاجرون فورًا. عندما نظر سو يونغ-وون إليهم بغضب، سكّت جو سونغ-هيون.</p>
+<p>لست متأكدة إذا كان ذلك لأن سو يونغ-وون مشهور برتبة أ أو لأنه كبير في نفس الأكاديمية، لكن بفضل ذلك أصبح الجو أكثر هدوءًا.</p>
+<p>"سو يونغ-وون. تانك من رتبة أ."</p>
+<p>(ملاحظة: كلمة "تانك" هنا تعني شخص قوي يتحمل الضرر ويحمِي الفريق في المعارك.)</p>
+<p>"...أنا جو سونغ-هيون. انضممت إلى هوانغيا كجزء من متطلبات التخرج. أستخدم السيف بشكل رئيسي."</p>
+<p>بعد أن أنهى سو يونغ-وون تقديم نفسه، تحدث جو سونغ-هيون بتردد.</p>
+<p>لست متأكدة كم سيستطيع تشا تاييانغ وجو سونغ-هيون المساهمة، لكن من النظرة الأولى، التوازن بدا جيدًا.</p>
+<p>"رغم أنني من رتبة ج، إلا أنني ربما لدي أكبر خبرة ميدانية بيننا. في حالة الطوارئ، رجاءً اتبعوا تعليماتي."</p>
+<p>"تاييانغ، عليك أن تصغي جيدًا لذلك السيد كيم!"</p>
+<p>باستثناء الغولبين، لم يرد أحد على كلامي.</p>
+<p>تحركت السيارة الفان الفضية بسلاسة عبر شوارع الليل الخالية نحو يوييدو.</p>
+<p>◆◇◆◇◆</p>
+<p>أمام مبنى الجمعية الوطنية، كانت سيارات مكتب إدارة الظواهر الغريبة مصطفة. كان موظفو المكتب قد سيطروا على المنطقة جيدًا؛ لم يكن هناك أي شخص في الأفق.</p>
+<p>أوقفنا السيارة بجانب الطريق واقتربنا من بوابة الميدان مع المجموعة.</p>
+<p>بعد أن أظهرنا بطاقات تسجيل الأشخاص المستيقظين التي تثبت عضويتنا في نقابة هوانغيا لموظفي المكتب عند البوابة، وقفنا أمامها.</p>
+<p>تدفق ضوء بألوان لا توصف بشكل فوضوي. رؤية ما يشبه عالمًا محطمًا لم تصبح سهلة مهما رأيته مرات كثيرة.</p>
+<p>بعد فحص المعدات للمرة الأخيرة، خطونا نحو البوابة.</p>
+<p>[دخول الميدان "حديقة الساحر" (رتبة ج).</p>
+<p>-  الوقت المتبقي: 07:15:58</p>
+<p>-  الحد الأقصى للأشخاص: 5]</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+  </html>
