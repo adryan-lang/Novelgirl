@@ -1,0 +1,540 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل الأول</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/cover1.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل الرابع
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل الرابع</p>
+<p>كان "تنين الخراب" مكانًا فريدًا في عالم القصص المصوّرة (المانهوا). فرغم عزلته وبعده عن العالم، كان يجذب دائمًا أنظار أصحاب القدرات الخارقة، لأسباب مختلفة.</p>
+<p>وكان يُقال إن الحارس المسؤول عن "تنين الخراب" يُعد من أقوى أصحاب القدرات الخارقة، ويحتل مرتبة عالية بينهم. ولهذا السبب، لم تخضع المدينة لحكم الإمبراطورية. ولكن، في الوقت نفسه، لم يكن هذا الحارس يظهر لإدارة شؤون المدينة، مما جعل "تنين الخراب" تعيش في حالة من الفوضى.</p>
+<p>في الواقع، هذا ما جعل المدينة مأوى مناسبًا لأصحاب القدرات الضعيفة أو ذوي الرتب المنخفضة.</p>
+<p>كان في المدينة كل أنواع القوى. فهناك منظمات تقوم على الإيمان فقط، ومجموعات صغيرة تجمّعت لمجرد البقاء، وأيضًا...</p>
+<p>كيانات مثل "النُحاس المُلطَّخ"، الذين جمعوا ثروتهم من خلال تجارة أصحاب القدرات الخارقة.</p>
+<p>وكان هذا هو المكان الذي وُجد فيه "تانغ".</p>
+<p>[تم خصم 100 نقطة من الشعبية. الرصيد المتبقي: 582.]</p>
+<p>[تم شراء أداة: [إخفاء الوجود] بنجاح. بدء العد التنازلي: 10:00 دقائق]</p>
+<p>[العد التنازلي لأداة [إخفاء الوجود]: 09:59]</p>
+<p>"هناك دخيل! هناك دخيل!"</p>
+<p>الإنذارات الصاخبة، مصحوبة بأضواء حمراء حادة، ملأت الليل المظلم بجو من الذعر.</p>
+<p>"أغلقوا البوابة الرئيسية! لا تدعوا المتسللين يهربون!" صرخ الرجل الطويل عريض الكتفين وهو يرفع يده. كان يرتدي رداءً أسود تزيّنه تطريزات ذهبية تشبه الأسماك، وقد تموّجت تلك التطريزات استجابة لحركته.</p>
+<p>وقف أمامه مجموعة من الحراس يرتدون الرداء الأسود نفسه، لكن دون تطريز. انطلقوا بسرعة لكن بشيء من الفوضى، ليحتلوا مواقع الهروب المحتملة.</p>
+<p>دَوَت أصوات الأقدام المتداخلة في أرجاء المكان، بينما كان الحراس يركضون داخل الأسوار، وأضواؤهم الحمراء والصفراء تلمع في الظلام.</p>
+<p>وحين ابتعدت الأضواء، تسللت ظلٌّ مظلم بسرعة، مستغلاً النقطة العمياء لدى أحد الحراس.</p>
+<p>كان المجمع المربع الشكل يغطي مساحة تُقدّر بعشرة آلاف متر مربع. وعلى الرغم من أنه يبدو من الخارج كأنه مبنى مكوّن من أربعة طوابق، إلا أن داخله لا يحتوي سوى على ثلاثة. واجهته البرونزية كانت تنسجم مع عتمة الليل، وفي كل زاوية من الطابق الأرضي ارتفع عمود. وكان المركز مغطى بلون أبيض. وبشكل عام، بدا المبنى وكأنه إناء مربع ضخم يُعرف باسم "دينغ" (ملاحظة: الدينغ هو وعاء برونزي قديم كان يُستخدم في الصين لأغراض طقسية).</p>
+<p>هنا، في هذا المكان، كانت "تانغ" محتجزة. إنه مقر منظمة "البرونز الملوّث"، وهي منظمة تتعامل مع القدرات الخارقة. قائد المنظمة لم يكن موجوداً في اللحظة الحالية، والشخص الذي تسبب في الفوضى لم يتمكن من الهرب بعد.</p>
+<p>في الواقع، رئيس المنظمة خان البطل بالفعل. لقد كشف عن عنوان المقر، رغم علمه بخطة البطل.</p>
+<p>كانت "لونا" تدور حول محيط المبنى. تمسكت بالبقاء في الظلال، لكنها لم تحاول إخفاء وجهها.</p>
+<p>كانت تمشي بخطى ثابتة، ونظرات باردة تملأ عينيها.</p>
+<p>[تم خصم 100 نقطة من الشعبية. الرصيد المتبقي: 482 نقطة.]</p>
+<p>[تم شراء الأداة [خريطة النقاط الحمراء] بنجاح. العد التنازلي: 10:00 دقائق]</p>
+<p>ظهرت خريطة بسيطة ثنائية الأبعاد أمامها. النقطة الزرقاء، التي تمثل موقعها، كانت في المنتصف تماماً.</p>
+<p>وكانت تلك النقطة الزرقاء محاطة ببحر من النقاط الحمراء.</p>
+<p>"فرقة السيكادا، نُعلن عن رصد هدف! تم رصد المتسلل في الطابق الثاني، الجهة الغربية!"</p>
+<p>الإعلان كان مسموعًا على بُعد مئات الأمتار. تسللت خطوات عبر الباب الواسع. توقفت لي لي ولصقت ظهرها بالحائط، ثم دخلت بسرعة بعد أن تلاشت الأصوات.</p>
+<p>كان المبنى مظلمًا من الداخل. اندفعت النقاط الحمراء نحو الدرج وهي تحمل مصابيحها اليدوية. حبست لونا أنفاسها واختبأت تمامًا.</p>
+<p>الأداة المسماة [إخفاء الوجود] كانت أرخص قليلًا لأنها لم تكن أداة تمنح قدرة خاصة. وظيفتها الوحيدة كانت إخفاء وجود المستخدم حتى تنتهي مدة استخدامها.</p>
+<p>لكن الإخفاء لا يعني الاختفاء التام، إذ يمكن كشف أمرها إذا رآها أحد.</p>
+<p>مع ذلك، طالما أنها بقيت بعيدة عن الأنظار، كان بإمكانها أن تدخل إلى مقرهم الرئيسي دون أن يشك أحد.</p>
+<p>انتظرت لحظة، ثم اتجهت في الاتجاه المعاكس.</p>
+<p>المتسلل الذي تم اكتشافه لم يكن هي، بل البطل الرئيسي الذي كان قد تسلل في وقت سابق من هذه الليلة.</p>
+<p>كان البطل قد اقتحم مقر منظمة القوى المسماة البرونز المُلطّخ، وذلك في الجزء الأول من التحديث الأخير للّعبة. قام بتدمير مولد الطاقة الرئيسي في المقر، وتمكن وسط الفوضى الناتجة من تحديد مكان «تانغ».</p>
+<p>كانت «تانغ»، التي كان كل من زعيم المنظمة وأعضاؤها يرونها مجرد بضاعة، في الحقيقة طفلة لا يتجاوز عمرها سبع أو ثماني سنوات.</p>
+<p>أراد البطل إنقاذها، لكنه أثناء محاولته الخروج، فعّل بطريق الخطأ جهاز الإنذار الموضوع حول الطفلة.</p>
+<p>فاشتغل مولد الكهرباء الاحتياطي فورًا، وبدأت المنظمة حملة تفتيش عن المتسلل، فوقع البطل محاصرًا داخل المبنى.</p>
+<p>أما الشخصيات التي شاركت في هذا الجزء من اللعبة، فكانت:</p>
+<p>البطل من التصنيف "د" (أي بمستوى قوة منخفض)،</p>
+<p>«تانغ» ذات التصنيف غير المعروف،</p>
+<p>زعيم منظمة "البرونز الملطّخ" من التصنيف "ب"،</p>
+<p>وعدد من أتباعه من التصنيف "ج".</p>
+<p>بغض النظر عن زاوية النظر، بدا التفوق الهائل للعدو أمرًا لا يُمكن تجاهله.</p>
+<p>مع ذلك، لو ظهر شخص في هذه اللحظة وقدم يد العون، فسوف ينال بسهولة تعاطف البطل والجمهور على حد سواء.</p>
+<p>كانت لونا تدرك أنها ليست مشهورة بما يكفي بعد لتسير بأمان في القصة دون مجهود. كان عليها أن تضمن ظهورها في التحديث القادم، وإلا فإن الناس سينسونها بسرعة.</p>
+<p>كان عليها أن تستفيد من كل ما تعلمته في الفصل الماضي وتساعد البطل في مهمة الإنقاذ. لم يكن لديها وقت لتستريح بعد.</p>
+<p>لكن ما زال بإمكانها اختيار طريقة أكثر أمانًا للمشاركة.</p>
+<p>كان قلب لونا يخفق بقوة وكأنه سيقفز من صدرها. وضعت يدها على صدرها. كان الخوف من أن يُكشف أمرها في أي لحظة، ومن الخطر الذي قد يؤدي إلى موتها، يشد أعصابها كما تُشد أوتار آلة الكمان.</p>
+<p>كانت تبحث عن غرفة التحكُّم الرئيسية.</p>
+<p>البحث الأحمق عن البطل في هذه الظروف لن يؤدي إلا لوقوعهما في الفخ معًا. ولم تكن لتفعل شيئًا كهذا.</p>
+<p>كانت هناك غرفة تحكم رئيسية في الطابق الأول من مقر جماعة «البرونز الملوّث». كانت تخطط لتعطيل سلسلة الأوامر وإحداث فوضى في الاتصالات الداخلية.</p>
+<p>كان زعيم جماعة «البرونز الملوّث» من مستخدمي القدرات من الدرجة باء (أي يمتلك قدرة خاصة قوية، ضمن تصنيف القوّة). لم تكن لونا لتجرؤ على اقتحام المقر في وجوده، لكنها علمت أنه ليس في المكان هذه الليلة.</p>
+<p>كان عليها أن تنهي مهمتها بسرعة وتغادر. وعندما يخرج البطل، ستكون جاهزة لتقول عبارتها المألوفة: «سأبقى هنا لأُعيق مطارِديك»، لتُوهمه بأنها تضحّي لأجله.</p>
+<p>كان هذا أفضل خيار لتقليل المخاطر على نفسها.</p>
+<p>حدّقت لونا في خريطة النقاط الحمراء. كانت هناك ثلاث نقاط حمراء تتجه نحوها.</p>
+<p>سارعت لعبور الممر إلى الجهة الأخرى، واختبأت خلف عمود دعم. ظهرت فرقة مسلحة من الجهة اليسرى عند مفترق الطريق بعد لحظة واحدة فقط. كانت أشعة مصابيحهم اليدوية تتحرك عبر الجدران والعمود، مما خلق ظلالًا طويلة في كل مكان.</p>
+<p>حبست لونا أنفاسها بينما كانت الأصوات تقترب أكثر فأكثر.</p>
+<p>انتظرت مرور المجموعة على أمل أن يبتعدوا نحو الجهة اليمنى.</p>
+<p>كان ضوء برتقالي دافئ يضيء حبيبات الغبار العالقة في الهواء، قبل أن تُغطى فجأة يدٌ مصدرَ الضوء.</p>
+<p>شخص ما اقترب من صاحب المصباح. ثم استدار الاثنان واتجها نحو لونا!</p>
+<p>يا للمصيبة! كانت على وشك أن تُكتشف! فتوقفت لونا عن التنفس تماماً.</p>
+<p>اخترق الضوء الظلام، كاشفاً عن ظل جسد خلف العمود.</p>
+<p>[الأداة: "إخفاء الوجود" انتهى مفعولها مؤقتاً]</p>
+<p>ملابس قاتمة، شعر قصير وناعم، و—</p>
+<p>[الأداة: "تعويذة الصدمة (3 دقائق)" تم شراؤها بنجاح]</p>
+<p>—ذلك الابتسام الثابت الذي لا يتزحزح.</p>
+<p>انطلقت موجة كهربائية في الهواء. فتجمّد الأعداء الثلاثة في أماكنهم قبل أن يتمكنوا حتى من الصراخ.</p>
+<p>"دن دن دن."</p>
+<p>ثم سُمعت ثلاث ضربات مكتومة مع سقوط أجسادهم على الأرض.</p>
+<p>"فرقة السيكادا! ماذا حدث؟!"</p>
+<p>جهاز الاتصال اللاسلكي ما زال يعمل بعناد، وبدا أن المسؤول عن المتابعة قد سمع الضجة من الطرف الآخر.</p>
+<p>ثم امتدت يدٌ والتقطت الجهاز من الأرض.</p>
+<p>"آه، لا شيء... فقط أقوم بطرد بعض البعوض." خرج صوت رجل عميق من حلق لونا، بينما كانت تخطو فوق أعدائها الذين سقطوا. انساب معطفها الأسود الطويل في مكانه الطبيعي، ثم دار معها في الهواء مرة أخرى.</p>
+<p>كانت لونا قد اتخذت في لحظة خاطفة قراراً بتبديل أداتها الخاصة بالقدرة. ولم يتبقَّ معها سوى ما يقارب مئة نقطة من "الشعبية"، وهو رصيد لا يكفي لتكرار هذه الخطوة مجدداً. لذلك كان عليها أن تستغل فرصتها الوحيدة بأفضل شكل ممكن.</p>
+<p>وضعت جهاز الاتصال اللاسلكي في جيبها، وأطلقت زفرة طويلة بصمت.</p>
+<p>حقاً، المواجهات المباشرة تجعل الدم يغلي في العروق.</p>
+<p>مرّت الثواني كأنها دقائق. وكان الوقت المتبقي لتعويذتها ذات الثلاث دقائق يتناقص بسرعة. عليها أن تُسرع.</p>
+<p>تخلّت لونا عن التخفي، وانطلقت بسرعة نحو غرفة التحكّم الرئيسية.</p>
+<p>كان الشاب ذو المعطف الأسود الطويل يمشي بخطى ثابتة في الممر، بينما كانت أطراف معطفه تتطاير خلفه بفعل الريح.</p>
+<p>"من أنت؟"</p>
+<p>"أزززززز" (صوت كهرباء!)</p>
+<p>بعد وميض من التيار الكهربائي، تخطت الأحذية رجلاً يرتدي رداءً مذهولاً دون أن تتوقف.</p>
+<p>[العنصر [تعويذة صاعقة (٣ دقائق)] العد التنازلي: ٠٠:٠٥]</p>
+<p>وأخيراً، وصلت لونا إلى باب معدني. أزاحت نظرها عن خريطة النقاط الحمراء ومدت يدها.</p>
+<p>[العد التنازلي: ٠٠:٠٣]</p>
+<p>دفعت الباب لفتح غرفة التحكم الرئيسية. قبل أن يتمكن أحد بداخلها من الرد، أضاء المكان للحظة بصعقة كهربائية.</p>
+<p>[العد التنازلي: ٠٠:٠١]</p>
+<p>سمعت طرَقات مكتومة تتردد في أنحاء الغرفة بلا انتظام. تم تحييد كل النقاط الحمراء على الخريطة.</p>
+<p>[العنصر [تعويذة صاعقة (٣ دقائق)] العد التنازلي: ٠٠:٠٠]</p>
+<p>تنفست لونا أخيراً الصعداء.</p>
+<p>فركت وجهها وهي تخطو للأمام. كانت عضلاتها متيبسة من محاولة الحفاظ على ابتسامة مصطنعة طوال الوقت.</p>
+<p>"يا للعار. كدت ألا أنجح." تمتمت.</p>
+<p>وضعت لونا كلا يديها على لوحة التحكم الأمنية وأمعنت النظر فيها بالكامل.</p>
+<p>المولد الاحتياطي لمركب "برونز المتآكل" كان يسمح فقط لغرفة التحكم الرئيسية بإصدار الأوامر ولا شيء أكثر من ذلك. كانت لي لي قد أوقفت الشخص المسؤول سابقاً قبل أن يتمكن من الرد.</p>
+<p>كانت الأمور ستكون أكثر تعقيداً لو كان قائد "برونز المتآكل" موجوداً.</p>
+<p>القائد كان يستخدم قدرة من الدرجة ب، أي أعلى درجة من حتى رئيس المجموعة. لو كان موجوداً، لما كانت لونا قد نجحت بهذه السهولة.</p>
+<p>لكن البطل جاء تحديداً الليلة بسبب غياب القائد.</p>
+<p>في هذه اللحظة، ظهر اتصال مباشر فجأة على لوحة التحكم الرئيسية.</p>
+<p>هذه هي "فرقة دودة القز"، قال رجل في منتصف العمر، "البضاعة بدأت تقلق. نطلب الدعم من فرقة النمر."</p>
+<p>لونا فهمت على الفور ما المقصود بـ"البضاعة".</p>
+<p>كما ذُكر سابقاً في القصة المصورة، كانت منظمة القدرات "برونز المتآكلة" تبيع مستخدمي القدرات كـ"بضاعة". وكان تانغ تعتبر سلعة مميزة وله مشتري محجوز مسبقاً.</p>
+<p>عالم القدرات الخارقة في "ما وراء الأسود والأبيض" هو حقاً عالم فيه تنافس شديد بين الجميع. منظمات مثل "برونز المتآكلة" ليست نادرة.</p>
+<p>في هذا العالم، تُعتبر القدرات قيمة جداً، والقوانين الموجودة تحكم فقط الأشخاص العاديين. حاول البعض سابقاً السيطرة على مستخدمي القدرات، لكن من تجرأ منهم مات على يد من هم أقوى.</p>
+<p>كل شيء يعود إلى الخصائص الخاصة للقدرات.</p>
+<p>هناك طريقتان للحصول على القدرات: الاستيقاظ الطبيعي أو الوراثة الجينية. عادةً ما يحدث الاستيقاظ الطبيعي في مواقف حياة أو موت أو بفعل محفزات قوية.</p>
+<p>هناك ثلاث طرق لتعزيز القدرات: الطريقتان السابقتان، والطريقة الثالثة هي امتصاص قدرة من نفس النوع.</p>
+<p>بعض مستخدمي القدرات يرون أنه لا حاجة للمخاطرة بحياتهم للاستيقاظ الطبيعي، عندما يمكنهم فقط امتصاص قدرة شخص آخر. وهذا أيضاً سبب صعوبة حياة مستخدمي القدرات ذوي المستوى المنخفض.</p>
+<p>لونا فهمت ذلك. القصة المصورة تحتاج إلى توتر وصراع مستمر.</p>
+<p>ظهرت علامة تحذير على العنصر [خريطة النقطة الحمراء]. نقطة حمراء كانت تتجه مباشرة إلى غرفة التحكم الرئيسية. استجمعت لونا أعصابها واستدارت لتغادر.</p>
+<p>لا يزال هناك ثلاث دقائق في العد التنازلي. كانت لونا تتجنب النقاط الحمراء كما فعلت في طريقها إلى هنا. البطل هو من يجذب معظم الانتباه، لذلك كانت رحلتها متوترة لكنها لم تكن صعبة.</p>
+<p>تمكنت من مغادرة المبنى بنجاح بعد قليل والاحتماء تحت المظلة.</p>
+<p>^صوت تشويش كهربائي.^</p>
+<p>"سيلكوورم فقد السيطرة! سيلكوورم فقد السيطرة!"</p>
+<p>لونا لم ترم جهاز اللاسلكي الذي التقطته سابقًا. استمعت لبعض الوقت.</p>
+<p>البطل قد تفقد المكان جيدًا ليأتي في الليلة التي كان فيها زعيم مجموعة البرونز الملطخ خارجًا. المنظمة التي بلا قائد كانت في حالة فوضى كبيرة، مثل دجاجة بلا رأس.</p>
+<p>نظرت لونا إلى خريطة النقاط الحمراء. النقطة الحمراء التي تتجه إلى غرفة التحكم وصلت للتو. وبينما كانت تستعد للمغادرة، جاء صوت عبر جهاز اللاسلكي.</p>
+<p>"–مساء الخير لكل القمامة الموجودة هناك. هل تسمعوني؟"</p>
+<p>على عكس باقي الأصوات، كان هذا الصوت هادئًا ومليئًا بالغرور بلا خجل.</p>
+<p>"لطالما تساءلت لماذا منظّمتي مليئة بالقمامة."</p>
+<p>تحدث الشخص ببطء وراحة، كأنه ليس في عجلة من أمره: "هل فعلاً استغرق الأمر فقط شخصين يمتلكان قدرات ليصلوا بمجموعة البرونز الملطخ لهذه الحالة؟"</p>
+<p>نبرته وتلميحه كانا واضحين للغاية بشأن هويته.</p>
+<p>زعيم مجموعة البرونز الملطخ، المشكلة الكبيرة من الدرجة الثانية بالنسبة لهم، عاد من جديد.</p>
+<p>وفقًا لخطة البطل، لم يكن من المفترض أن يعود مبكرًا هكذا!</p>
+<p>ماذا الآن؟ هل عليها أن تغادر أم تنتظر وصول البطل للقتال؟</p>
+<p>نظرت إلى عداد وقت استخدام الأدوات الخاص بها. تبقى حوالي دقيقة واحدة. في نفس الوقت، النقطة الخضراء التي تمثل البطل تقترب من البوابات الرئيسية.</p>
+<p>تنفست لونا بعمق: إذا غادرت الآن، لن تضمن أن البطل سيتمكن من الهروب. وإذا لم يتمكن من الهروب، فمن يدري متى ستأتي الفرصة التالية لتستفيد من الأضواء المسلطة عليه؟</p>
+<p>يجب أن تظهر في التحديث القادم!</p>
+<p>فجأة، بدأت خريطة النقاط الحمراء تتحرك بسرعة مع تسارع النقطة الخضراء. اخترق البطل الحاجز واندفع خارج البوابات الرئيسية.</p>
+<p>استدارت لونا مختبئة في الظل.</p>
+<p>الشاب الأسمر الذي رأته على غلاف الرواية، والذي كان يهرع الآن حاميًا فتاة في السادسة من عمرها، فعل الشيء نفسه.</p>
+<p>[عداد زمن الأداة [إخفاء الوجود]: 00:00]</p>
+<p>التقت العيون الزرقاء مع العيون السوداء الداكنة.</p>
+<p>الشخصية ثنائية الأبعاد من المانهوا تحولت إلى شكل ثلاثي الأبعاد حقيقي. شعر بني قصير، عيون زرقاء جميلة تشبه السماء، وجه لا يزال يحتفظ ببعض علامات الطفولة، وتعبير عازم.</p>
+<p>بدا وكأنه يخرج من صفحات الأبيض والأسود ليقف أمام عينيها.</p>
+<p>تذكرت لونا اسم الشاب على الفور. لا شك فيه، هذا هو بطل المانهوا، جيسون.</p>
+<p>الشاب الذي يرتدي سترة دنيم تشنج فورًا. بدا وكأنه اتخذ قرارًا ما.</p>
+<p>لم تعرف لونا ما الذي كان يفكر فيه البطل، لكنه أمسك بمعصمها بعد أن نظر إلى عنقها.</p>
+<p>"تعالي معي!" قال بسرعة، "سأخرجك من هنا!"</p>
+<p>الفتاة الصغيرة بين ذراعيه نظرت إليه بفراغ، كاشفة عن طوق أسود مماثل حول عنقها.</p>
+<p>تذكرت لونا اختيارها للإكسسوارات وفهمت على الفور.</p>
+<p>جيسون ظن أنها واحدة من البضائع الهاربة.</p>
+<p>كانت قد جاءت لإنقاذه، لكن الأمور يبدو أنها انقلبت عليها؟</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+  </html>
