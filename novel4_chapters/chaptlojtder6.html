@@ -1,0 +1,535 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل الأول</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/cover4.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل السادس
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل السادس</p>
+<p>بعد ذلك، بدأ هو بتنظيف الحديقة الصغيرة من تلقاء نفسه، رغم أن أحدًا لم يطلب منه ذلك.</p>
+<p>عادت كبيرة الخدم إلى المطبخ بعد أن طرحت عليه العديد من الأسئلة. ويبدو أنها تخلّت عن الأمر في منتصف الطريق بسبب بُخله في الإجابات.</p>
+<p>"هممم..."</p>
+<p>وقفت الخادمة داخل المطبخ، وهي تنظر إلى "رو" من خلال النافذة بعينٍ قلقة.</p>
+<p>وفي تلك الأثناء، كان "رو" يتحدّث بتفاهم كبير مع شخصٍ لا نعلم من أين جاء به. لكن بالنظر إلى الكلمات التي تبادلوها – مثل: أشجار الحديقة، النوافير، أسماك الزينة – بدا وكأنهم يخطّطون لإعادة تهيئة الحديقة بالكامل وإجراء تعديلات كبيرة.</p>
+<p>ما معنى أن يقوم البستاني، الذي وظّفوه للعناية بالحديقة، باستئجار خبيرٍ ليقلب الحديقة رأسًا على عقب؟</p>
+<p>"أنا أغار منه."</p>
+<p>رغم أنه يبدو مريبًا، لكنه أيضًا وسيم، غني جدًا، ويمتلك منزلًا. أما أنا، فقد كرّست حياتي سابقًا من أجل السلام العالمي، والآن أعيش كخادمة بالكاد أستطيع إشباع بطني.</p>
+<p>يعني، حتى القاتل الذي دخل منزله لم يطرده!</p>
+<p>هل "رو" هو العميل الذي طلب مراقبة الفيكونت "ويذروودز"؟ كان لا بدّ من التأكد من ذلك.</p>
+<p>أشرتُ إليه، بدلًا من الخادمة العاجزة التي كانت مقيدة بما يمكنها فعله أو قوله كإحدى المسؤولات في القصر.</p>
+<p>"أطرديه."</p>
+<p>نظرت إليّ الخادمة بدهشة:</p>
+<p>"من؟ السيد رو؟"</p>
+<p>"مشبوه."</p>
+<p>"أليس هذا الوصف ينطبق عليكِ أيضًا؟"</p>
+<p>أنا؟ لكن لا مجال للمقارنة!</p>
+<p>"صحيح أن السيد رو ليس شخصًا عاديًا إطلاقًا. لا أظنني رأيتُ أحدًا غريبًا مثله طوال سنوات عملي في هذه الوظيفة... باستثناءكِ أنتِ."</p>
+<p>"إذًا اطرديه."</p>
+<p>"لا داعي للعجلة، آنسة ديزي. إن كان هناك رجل خطير فعلًا داخل القصر، فإن الفيكونت ويذروودز سيطرده بنفسه. لا تقلقي كثيرًا."</p>
+<p>كيف يمكن لفيكونت غير موجود أصلاً أن يطرد هذا الرجل؟</p>
+<p>كأن كبيرة الخدم مطمئنة أكثر من اللازم.</p>
+<p>كنتُ أودّ أن أقول: 'في الفجر، دخل قاتل إلى المنزل، لكنني تغلّبتُ عليه وحبسته في المنزل المقابل. واليوم، رأيت نفس القاتل بجانب رو. لا شك أن الاثنين متورطان معًا وقد أُرسلا للتجسّس على الفيكونت ويذروودز!' لكنني صمتُّ.</p>
+<p>لأنني لو قلتُ ذلك، فسأبدو أنا المشبوهة.</p>
+<p>في الحقيقة، لا يهمني كيف أنظر في أعين الآخرين. لكن إن كانت الخصم هي الخادمة المسؤولة في قصر ويذروودز، فموقفي مختلف تمامًا.</p>
+<p>'لا أحد يقبل بشخص غريب الأطوار مثلي... سوى عائلة غريبة مثل عائلة ويذروودز.'</p>
+<p>لو تم طردي من منزل كهذا، فلن يكون لدي مكان آخر أذهب إليه.</p>
+<p>المال شيءٌ خطير للغاية. لا يمكنني حتى أن أفصح عن وجود أمرٍ قد يُهدد حياة صاحب القصر.</p>
+<p>قالت إحدى الخادمات: "وفوق ذلك، أليس من المُؤسف طرد البستاني لمجرد أنه عرض أن يُعيد تصميم الحديقة بنفسه مقابل نصف السعر؟ حتى عائلة ويذروودز، برغم ثرائها، ستجد هذا النوع من التوفير مغريًا. دعونا ننتظر ونراقب الوضع لبعض الوقت."</p>
+<p>الخادمة كانت عبدةً حقيقية لـ"النظام الرأسمالي".</p>
+<p>المال... شيء خطير للغاية. لدرجة أنه قد يدفع الناس إلى إبقاء رجلٍ مشبوه في المنزل فقط لأنه يوفر بعض المال.</p>
+<p>"حسنًا، لنبدأ العمل؟"</p>
+<p>كانت مهمة اليوم هي تنظيف نوافذ الطابق الثاني. وللتوضيح، هذا النوع من التنظيف هو أبغض ما لدي. فهو ثاني أصعب شيء بعد تنظيف الأسقف.</p>
+<p>وبما أنني خادمة ملتزمة في هذا الزمن، ومخلصة لمالك القصر، لم أنسَ أن أُراقب البستاني أثناء قيامي بمسح النوافذ. ماذا سأفعل لو فقدتُ هذه الوظيفة الثمينة، بل الوظيفة الوحيدة المتبقية لي؟</p>
+<p>كان البستاني يقتلع الأعشاب اليابسة في الحديقة.</p>
+<p>حتى طريقة اقتلاعه للأعشاب بدت مريبة، فتابعتُ مراقبته بدقةٍ أكبر.</p>
+<p>"في مثل هذا الموقف، من المفترض أن تفتعل شجارًا بسيطًا مع الشخص حول أمر تافه، ثم تدخل في مواجهة جسدية تُجبره على الكشف عن حقيقته."</p>
+<p>كما فعلتُ سابقًا مع القاتل الذي هاجمني قبل الفجر.</p>
+<p>لكن مع "رو"، نادرًا ما أُتيحت لي فرصة القيام بذلك. بشكلٍ مفاجئ، لم يُظهر "رو" أي لحظة ضعف أو تهاون.</p>
+<p>الأمر تجاوز حدود المعقول. أنتَ وسيم، ثري، تمتلك منزلًا، وحتى تصرفاتك مثالية؟</p>
+<p>"ما هدفك الحقيقي؟"</p>
+<p>وحينها...</p>
+<p>بينما كان يجمّع الأعشاب التي اقتلعها، رفع "رو" رأسه فجأة.</p>
+<p>"هل لديكِ ما تريدين قوله؟"</p>
+<p>كان صوته عاديًّا، لكنني سمعته بوضوحٍ تام، وكأنه يهمس مباشرةً في أذني.</p>
+<p>كان يرتدي قميصًا أبيض وسترة خفيفة بلونٍ أصفر باهت، منهمكًا في عمله كالبستانيين المحترفين... وكان يبدو رائعًا. لكن في النهاية، ماذا قد لا يليق برجلٍ جميل؟</p>
+<p>لا يمكنني أن أدخل في شجارٍ جسدي معه، لذا من الأفضل التظاهر وكأن شيئًا لم يحدث.</p>
+<p>سألته وأنا أُسند ذقني على حافة النافذة:</p>
+<p>"من أنت؟"</p>
+<p>أجابني وهو يبتسم: "إذا كنتِ تقصدين اسمي الأول، فأنا أخبرتكِ من قبل أن اسمي هو رو، أيتها الآنسة الخادمة."</p>
+<p>"الآنسة الخادمة"... شعرت بالضيق رغم أن الأمر كان مجرد مزاح.</p>
+<p>"لا أقصد اسمك."</p>
+<p>ضيّق "رو" عينيه وكأنّه يبتسم، لكن لم يكن في وجهه أي تعبير يدل على الفرح.</p>
+<p>"هل تقصدين أنكِ ترغبين بمعرفة المزيد عني؟ لا أظن أننا وصلنا إلى هذه المرحلة من العلاقة بعد."</p>
+<p>"توقّف عن التصرّف كالأوغاد، وأجبني. من أنت؟ ولماذا أنت هنا؟"</p>
+<p>لقد مرّ وقتٌ طويل منذ أن تحدثتُ بهذا الطول، لدرجة أنني شعرت بانقطاع أنفاسي.</p>
+<p>"لأنني من معجبيكِ."</p>
+<p>ماذا؟</p>
+<p>قالها وهو يبتسم وينظر إلى وجهي مائلًا برأسه قليلاً.</p>
+<p>"في الليلة الماضية، أمسكتِ بمتحرّس وربطته أمام منزلي. لقد كان تصرّفكِ مثيرًا للإعجاب فعلًا، أن تقيّدي رجلاً غريبًا في مكانٍ لم تزوريه من قبل. كنت أفكر في منْحكِ وسام المواطِن الشجاع في منتصف الشتاء..."</p>
+<p>"هل تقول إن هذا هو سبب مجيئك إلى هذا القصر؟"</p>
+<p>مرةً أخرى، كان ما قاله سخيفًا للغاية، لدرجة أنني تحدثت مطولًا دون أن أشعر.</p>
+<p>ارتجفت كتفاي بسبب صوتي الذي لا يزال غريبًا عليّ، أما "رو" فهزّ كتفيه بابتسامةٍ لئيمة.</p>
+<p>"بالطبع لا."</p>
+<p>لا تريد أن تفتح فمك؟ حسنًا، لا خيار أمامي سوى أن أفتحه لك بنفسي.</p>
+<p>قفزتُ إلى الحديقة من خلال نافذةٍ مفتوحة.</p>
+<p>"أنت."</p>
+<p>وكنت أخطو نحوه بسرعة، بينما هو كان يراقبني براحة وذراعاه متشابكتان، ثم صرخ باتجاه داخل القصر:</p>
+<p>"رئيسة الخدم! الآنسة الخادمة تواصل العبث ومغازلتي! هل هذا مقبول؟ هل عائلة ويذروودز لا تحمي حقوق الإنسان الخاصة بموظّفيها؟"</p>
+<p>لم يكن هناك سوى رد فعل واحد مناسب لفُحش لسانه...</p>
+<p>أن أدير ظهري وأسير في نفس الطريق الذي جئتُ منه، وأدخل المطبخ من الباب الخلفي للقصر.</p>
+<p>كنت أضغط على أسناني بقوة من شدة الغضب.</p>
+<p>"مريب... بل وحقير أيضًا."</p>
+<p>ولِمَ تُخبر رئيسة الخدم هكذا؟!</p>
+<p>لقد بذلتُ جهدًا كبيرًا في تنظيف النوافذ حتى تنمّلت قدماي. بل إنني كسرتُ نافذة من شدة الحماس، لكن رئيسة الخدم لم تُوبّخني كثيرًا... رغم أن جزءًا من راتب هذا الشهر قد خُصم.</p>
+<p>بسبب ذلك، شعرت بإحباطٍ شديد وقت العشاء. وكالعادة، لم يكن على المائدة سوى أنا ورئيسة الخدم.</p>
+<p>"وأين الطباخ والبستاني؟"</p>
+<p>"قال إنه سيتناول عشاءه بمفرده. أظن أن القصر يتبع نظامًا معينًا في تناول الوجبات. من الآن فصاعدًا، ستكون لنا مائدة منفصلة."</p>
+<p>لا أصدق أن القصر يصبح خاليًا من الحياة بعد غروب الشمس... ذلك الأمر يعجبني.</p>
+<p>بدأتُ أتناول حساء الخضار — الذي لا يحتوي على أي لحوم — بسهولة.</p>
+<p>في صباح اليوم التالي.</p>
+<p>بعد أن أنهيتُ أعمال الصباح بسرعة، صادفت "رو" في الممر المؤدي إلى المطبخ. وكما في الأمس، بدا أنيقًا ونظيفًا بشكلٍ لا يشبه مظهر البستانيين (بل في الحقيقة، لم يكن غريبًا لو قيل إنه صاحب القصر بنفسه).</p>
+<p>"صباح الخير، يا آنسة الخادمة المساعدة."</p>
+<p>تجاهلتُ تحيته ودخلتُ إلى المطبخ، لكنني سمعت ضحكةً صغيرةً خلفي.</p>
+<p>كان "رو" يبحث في أرجاء المطبخ ثم تمتم بكلمةٍ واحدة:</p>
+<p>"هل لم تصل المواد التموينية اليومية حتى الآن؟"</p>
+<p>ردّت عليه رئيسة الخدم، التي كانت قد وصلت قبلي وكانت تحتسي الشاي:</p>
+<p>"نحن لا نطلب المكونات، بل نذهب إلى السوق ونشتريها بأنفسنا، يا سيد رو. والمواد الغذائية وصلت اليوم، وهي هناك."</p>
+<p>نظر "رو" إلى البطاطا والجزر والبصل المنتشرين داخل صندوق خشبي تحت الطاولة، ثم قال بتعجّبٍ قصير:</p>
+<p>"آه، ظننتُ أنها بقايا طعام فاسدة."</p>
+<p>لأول مرة منذ أن بدأ عمله بالأمس، بدا وكأنه يُعاني فعلًا من مشقّات الحياة وصعوباتها.</p>
+<p>ولأول مرة، شعرتُ بنوعٍ من التقارب أو التماثل مع "رو".</p>
+<p>نعم، هذه عائلة فقيرة شريفة ذات سمعة طيبة. لقد جئت هنا وكأنك تبحث عن فتات الطعام.</p>
+<p>"ليس بوسعنا فعل شيء. دعنا نكتفي بهذا كوجبة غداء اليوم. لكن على الأقل يسعدني أن الزبدة، والفلفل، والملح، والأعشاب، والحليب تبدو جيدة بما يكفي. مدبرة المنزل، أيتها الخادمة."</p>
+<p>ابتسم وأشار إلى الصندوق.</p>
+<p>"قطعيها."</p>
+<p>قطعت المكونات دون تذمر.</p>
+<p>هناك أمر أدركته خلال الشهر الماضي الذي عشته وكأني متسول، وهو أن من الجيد طاعة الشخص الذي يطعمك، على الأقل في الوقت الذي يقوم فيه بذلك.</p>
+<p>قمت بتقشير البطاطس وأنا أراقب "رو".</p>
+<p>بينما كان يبحث في الخزانة، أخرج مقلاة مربعة الشكل لم أرها من قبل، ثم أخذ صندوق توابل لم أره أيضًا من قبل.</p>
+<p>'هل كان هناك شيء كهذا في هذه المطبخ من قبل؟'</p>
+<p>بعد أن مسح الحاوية المغبرة بعناية، قطع الزبدة من الورقة ببطء وأذابها على النار. وبعد أن دهن المقلاة بالزبدة، أمسك السكين بمهارة وبدأ بتقطيع البطاطس إلى شرائح رقيقة.</p>
+<p>رتب البطاطس بشكل جميل داخل المقلاة، وبهّرها بالفلفل والملح، ثم غمرها بالحليب.</p>
+<p>بينما كنت أراقب مهاراته المذهلة في الطهي،</p>
+<p>"أيتها الخادمة."</p>
+<p>ناداني "رو" وهو يكسر الأعشاب المجففة إلى قطع صغيرة.</p>
+<p>"هل ترين ذلك الفأر على السور خلف النافذة؟"</p>
+<p>بهذه المفاجأة؟ رفعت عيني عن عمله ونظرت نحو النافذة. وكما قال "رو"، كان هناك فأر صغير رمادي يجري على حافة النافذة.</p>
+<p>"ذلك الفأر سيقشر البطاطس أفضل منك. سرعتك في التقشير بطيئة لدرجة أنها تثير الجنون."</p>
+<p>"...مم."</p>
+<p>الخصم هنا طاهٍ. على الأقل في هذه اللحظة، ليس بستانيًا بل طاهٍ.</p>
+<p>هو طريقي الوحيد للهروب من جحيم الطبخ الذي تصنعه مدبرة المنزل. لن أسمح لنفسي بأن أنجرف في المزاج السيئ.</p>
+<p>أسرعت في تقشير البطاطس. انتظر "رو" بصمت حتى أنهيت تقشير الباقي، ثم كرر نفس عملية الطهي مرتين أخريين في مقالي مختلفة. لم يتبقَ سوى الانتظار حتى تُخبز في الفرن.</p>
+<p>وأخيرًا.</p>
+<p>"كلي."</p>
+<p>في اللحظة التي وضعت فيها "الغراتان" (طبق بطاطس مشوي مع طبقة من الجبن أو الصلصة) الذي كان رائحته مغرية لدرجة لا تحتمل على لساني، لم أستطع إلا أن أغوص في هذا "الطعم" القوي الذي اجتاح حواسي.</p>
+<p>"كيف يكون بهذا اللذة؟"</p>
+<p>كان الأمر حقيقيًا. بشكل لا يصدق، كان "رو" طاهٍ ماهر.</p>
+<p>كان يعرف تمامًا كيف يستخدم المكونات الجيدة والسيئة. البطاطس التي بدت وكأنها على وشك الموت تحولت إلى طبق غراتان مثالي بين يديه.</p>
+<p>كان الطعم رائعًا ولا يمكن مقارنته بمهارات مدبرة المنزل في نفس المطبخ.</p>
+<p>"تأكلين بشكل جيد."</p>
+<p>ترك "رو" هذه الكلمات وهو يحدق بي قبل أن يخرج إلى الحديقة.</p>
+<p>ألا تشعر بالجوع؟ حتى أنني أكلت حصة "رو" من الغراتان.</p>
+<p>الحياة الممتعة والوجبات المرضية لا ينفصلان عن بعضهما البعض. كانت الخادمة، وهي تمسح فمها، تهمس بإعجاب وكأنها في حالة نصف غيبوبة:</p>
+<p>"لم أتناول إفطارًا بهذه اللذة منذ سنوات، مهارات السيد "رو" في الطهي مذهلة. أشعر بالذنب لأنني استأجرته بنصف الأجر المعتاد."</p>
+<p>عندما رأيت نظرات الخادمة تتعلق بطبق "الغراتان" وكأنها وقعت في حبه، شعرت بالخطر الذي كنت قد هدأت منه يعود مجددًا.</p>
+<p>'لا، بهذه الوتيرة، ستقع الخادمة في فخ هذا المخادع!'</p>
+<p>ربما لأن الشخص الآخر هو خصمي، حتى هذا الطبق اللذيذ بدا وكأنه تحفة فنية عظيمة هدفها إرباكي وإخراجي عن تركيزي.</p>
+<p>"يا لك من ماكر صغير."</p>
+<p>ليس من طبيعتي أن أعمل في نفس المنزل مع شخص يثير قلقي.</p>
+<p>'وأنا أكره أكثر عندما تبعث بكل كيانك إشارات شك.'</p>
+<p>هذا يعني أنه يثق بنفسه.</p>
+<p>هناك افتراضان يدوران في ذهني حول هوية "رو":</p>
+<p>الأول، أنه هنا ليتجسس على الفيكونت "ويذروودز" تمامًا مثل ذاك القاتل المأجور.</p>
+<p>الثاني، أنه يعرف ماضيّ وقد تبعني إلى هنا.</p>
+<p>'...ما هي احتمالات أن يكون الاحتمال الثاني صحيحًا؟'</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+  </html>
