@@ -1,0 +1,541 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل الأول</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/cover4.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل الثامن
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل الثامن</p>
+<p>في صباح اليوم التالي.</p>
+<p>عندما ذهبت إلى الفناء الخلفي لأخذ الغسيل، فوجئت بمنظر الحديقة عند أول نظرة.</p>
+<p>خلال يومين فقط، أصبحت حديقة قصر "ويذروود" تبدو في حالة جيدة.</p>
+<p>باستثناء المرة الأولى، لم يأتِ أي عامل آخر منذ اليوم الأول، ومع ذلك اختفى كل العشب الذابل، وتغطت الأرض بتربة ناعمة.</p>
+<p>"ظننت أنه تولى أي وظيفة فقط ليتمكن من دخول القصر."</p>
+<p>ومهاراته في الطهي... لماذا يجيد كل هذه الأمور؟ هذا يجعله أكثر إثارة للريبة.</p>
+<p>عندما حاولت استعادة ذلك الجمال الذي هز قلبي، تذكرت رسالة الليلة الماضية عن البطاطس. في تلك اللحظة، تقابلت عيناي مع "رو" الذي كان يمر بجانبي ممسكًا بمجرفة.</p>
+<p>أشار لي بيده في الوقت المناسب.</p>
+<p>"تعالي هنا، أيتها الخادمة."</p>
+<p>كم كنت أتمنى أن أتجاهله.</p>
+<p>"نحتاج إلى التواصل لأتمكن من معرفة نوع الشخص الذي هو عليه."</p>
+<p>توقفت عن وضع الملابس في السلة واقتربت من "رو". وعندما اقتربت بما يكفي، قلت بصوت متجهم:</p>
+<p>"ديزي."</p>
+<p>التفت "رو"، الذي كان يستدير أمام الدرج عند الباب الأمامي، ونظر إليّ بعينين غريبتين. ثم فتحت فمي مرة أخرى عندما رأيت وجهه المتألق.</p>
+<p>"اسمي."</p>
+<p>"...آه."</p>
+<p>وقف "رو" أمامي بابتسامة هادئة كما لو كانت عادة لديه.</p>
+<p>"حسنًا، الآنسة ديزي، الخادمة. أخيرًا حصلنا على اسم حقيقي بعد ثلاثة أيام. الطريقة الوحيدة لوصف تقدم علاقتنا هي أنها ممتازة."</p>
+<p>إذا كانت كل كلماته تبدو ساخرة، فهل هذه مشكلة في المتحدث أم في المستمع؟</p>
+<p>"سأترك لك هذا الوعاء."</p>
+<p>أخذت دون وعي الوعاء الصغير البني من يدي "رو". كان وعاءً مملوءًا بتربة رطبة تبدو جيدة للزراعة عند النظرة الأولى.</p>
+<p>"هل تعطيه لي؟"</p>
+<p>"حاولي أن تنمي شيئًا في هذا الوعاء. أي شيء كان. لا تعيدي زراعة أي نبتة فيه، بل ابدئي من البذور وليس من الشتلات."</p>
+<p>"أنا؟ لماذا؟"</p>
+<p>عندما سألتُ وسط ارتباكي، ردّ عليّ "رو" بنبرة وكأنني طرحتُ سؤالاً بديهياً.</p>
+<p>"ألم تقولي أنكِ فضولية؟ بشأن أمري."</p>
+<p>ما علاقة هذا بالزهور؟</p>
+<p>"للأسف، هويتي سر عظيم تتطلع الكثير من العيون إلى كشفه. لا أريد أن أشارك هذا السر مجاناً. بهذا المعنى، أليس إنبات الزهور ثمناً بسيطاً لدفعه مقابل ذلك؟"</p>
+<p>عبستُ ونظرتُ إلى الوعاء في يدي.</p>
+<p>"لماذا الزهور؟"</p>
+<p>هل هو يمزح معي الآن؟</p>
+<p>"هل عليّ فعل ذلك الآن؟"</p>
+<p>كان هذا الوعاء أول إجابة مقنعة من "رو" تجاه شكوكي وعدم ثقتي. هذه أول مرة يرد على تساؤلاتي بوضع شرط لسماع الجواب، بدلاً من تجاهلي كما فعل في اليوم الأول.</p>
+<p>قد يكون من الغباء الرفض لمجرد شعوري ببعض الإهانة.</p>
+<p>"إذا لم يعجبكِ، 500 قطعة ذهبية."</p>
+<p>"...500 قطعة ذهبية؟"</p>
+<p>"هذا هو الثمن لسماع تلك الأسرار بدون زهور."</p>
+<p>هل هذا المحتال مجنون؟ من أين لي 500 قطعة ذهبية؟ هل يظن أن هذا المبلغ سينبثق بمجرد البدء بالحفر؟ لا يمكنني جمع هذا حتى لو عملتُ كخادمة لمدة 100 سنة!</p>
+<p>أجبتُ وأنا أضم الوعاء بين ذراعي.</p>
+<p>"سأزرعها."</p>
+<p>"فكرة جيدة."</p>
+<p>"تمسك بكلمتك."</p>
+<p>ابتسم "رو" بلطف وهو يربت على رأسي. كانت هذه أخف وأبسط ابتسامة رأيتها منه حتى الآن.</p>
+<p>"نعم، آنسة ديزي، الخادمة. أتطلع لرؤية أي نوع من الزهور ستنبتين."</p>
+<p>هذا الرجل المزعج.</p>
+<p>بعد أن نظرتُ إلى ظهر "رو" العريض للحظة، وضعتُ الوعاء في مكانه الأصلي وعدتُ لجمع الغسيل.</p>
+<p>قررتُ التوقف عن التحقيق بشأن "رو" في الوقت الحالي.</p>
+<p>لم أتخلَ عن كشف هويته. أنا فقط آخذ خطوة للخلف.</p>
+<p>في النهاية، وكما قالت الخادمة، كان هذا أفضل نهج لمراقبته في الوقت الراهن.</p>
+<p>لم يكن لدي أشخاص أو مال للتحقيق بشأن "رو"، والأطراف المعنية ليست من النوع الذي يفتح فمه بسهولة، بالإضافة إلى أنني لم أعد أملك القوة لإجبارهم على الكلام.</p>
+<p>"علاوة على ذلك، الشك مجرد شعور. لم يفعل شيئاً بعد."</p>
+<p>إن إهدار طاقتي واهتمامي على "رو" أمر لا يستحق. حالياً، سأكتفي بالتعاون مع الخادم القاتل.</p>
+<p>الآن بعد أن أصبحت معتادة على مهام الخادمة، يجب أن أركز على جمع المعلومات المتعلقة بآثار "ديان خِت"  كل شيء له أولوية.</p>
+<p>"هل أحضرتي الغسيل، ديزي؟"</p>
+<p>"نعم."</p>
+<p>"سأرتبه، لذا اذهبي لشراء المواد الغذائية. تركتُ قائمة المكونات المطلوبة والنقود في المطبخ."</p>
+<p>"نعم."</p>
+<p>تحققت من قائمة المكونات التي يجب شراؤها أثناء خروجي من القصر. كانت نفس القائمة السابقة باستثناء إضافة البيض هذه المرة.</p>
+<p>لم يكن هناك لحم هذه المرة، لكن الأمر لم يكن سيئًا جدًا. كان واضحًا أن "رو" سيملأ المائدة بالأطباق حتى دون الحاجة للحوم.</p>
+<p>إنه يجيد الطهي.</p>
+<p>تلك المهارة هي الميزة الوحيدة التي يمتلكها "رو".</p>
+<p>قبل أن أدخل السوق، توقفت في زقاق ضيق وجلست أمام رجل مسن هزيل يبيع خضروات باهتة.</p>
+<p>"همم."</p>
+<p>رأيت حبة بطاطس بحالة سيئة، لكنني قررت شرائها.</p>
+<p>أزعجتني حالة الرجل العجوز الفقيرة، واعتقدت أنه لا بأس إن كانت المكونات ليست مثالية طالما أن مهارات الطاهي جيدة.</p>
+<p>"سبع حبات بطاطس."</p>
+<p>رفع الرجل المسن، الذي كان يغلبه النعاس، رأسه ونظر إلي بعينين متسعتين.</p>
+<p>"هاه؟ آه، لدينا زبون!"</p>
+<p>هذا الرجل العجوز لن يتمكن من العودة إلى منزله حتى يبيع بعض البطاطس.</p>
+<p>"شكرًا لكِ يا آنسة. عودي إلينا مرة أخرى."</p>
+<p>انحنى الرجل العجوز بجسده الهزيل ليشكرني.</p>
+<p>بعدما دفعت ثمن البطاطس، بدأت أعدها وأنا أقترب من السوق.</p>
+<p>"واحد، اثنان، ثلاثة... ثمانية."</p>
+<p>إنها ليست سبعة، بل ثمانية. يبدو أن الرجل العجوز أخطأ في العد.</p>
+<p>عدت في طريقي لأعيد حبة بطاطس.</p>
+<p>عندما عدت، كان هناك أشخاص جدد قد تجمعوا في الزقاق إلى جانب الرجل العجوز.</p>
+<p>كان المشهد مزعجًا للعين بطريقة ما.</p>
+<p>"أوه! يبدو أن هذا العجوز أخيرًا حصل على بعض المال."</p>
+<p>وقف ثلاثة رجال ضخام حول الرجل العجوز الذي يبيع البطاطس.</p>
+<p>الرجل الضخم في الوسط مد يده نحو العجوز.</p>
+<p>"أعطني إياه."</p>
+<p>"أرجوك، انتظر شهرًا فقط، شهرًا واحدًا..."</p>
+<p>"رسوم عضوية الجمعية التجارية متأخرة لأكثر من أسبوع. هل ظننت أننا لن نجدك لو اختبأت في مكان كهذا؟"</p>
+<p>"أنا مجرد رجل عجوز يعمل في تجارة بسيطة... الجمعية وهذه الأمور، قلتها عدة مرات، لن أنضم."</p>
+<p>في تلك اللحظة، ركل الرجل جسد العجوز بعنف بينما كانت يداه ما زالتا في جيبه. تدحرج الرجل العجوز الضعيف على الأرض دون حتى أن يصرخ. جبهته التي ضربت بكعب الحذاء تمزقت وبدأت تنزف.</p>
+<p>وكأن ذلك لم يكن كافيًا، داس الرجل الضخم على ظهر العجوز المنحني بلا رحمة.</p>
+<p>"أيها العجوز الحقير، إن لم تستطع دفع رسومك، فإما أن تغلق متجرك أو تخرج من منطقتنا!"</p>
+<p>"تبًا!"</p>
+<p>بصق الرجل، الذي ما زالت يديه في جيب بنطاله، على العجوز.</p>
+<p>"لا بأس، سأعود في نفس الوقت غدًا، لذا لا تنسى ذلك."</p>
+<p>وهكذا، تلاشى الدخل القليل للرجل العجوز في قبضة جشعة.</p>
+<p>نظرت إلى حبات البطاطا التي يعرضها العجوز، كانت في حالة يرثى لها. لم يكن لديه سوى أقل من عشرين حبة. على الأقل أخذت منه ثماني حبات، وبقي حوالي عشر حبات أخرى، وبعضها بدأ يزهر باللون الأزرق (إشارة إلى فسادها أو قربها من التعفن).</p>
+<p>الرجل العجوز لا يبيع البطاطا ليعيش في رفاهية أو رخاء. إنه يبيعها فقط ليبقى على قيد الحياة، ليهرب من شبح الجوع الذي يطارده كل يوم. هذا رجل يعيش يوماً بيوم، معتمدًا على ما يبيعه.</p>
+<p>انظر إلى جسده النحيل. إن لم يستطع بيع البطاطا ليوم واحد، كان من الواضح أنه سيتضور جوعًا ويمرض. ولو لم يستطع البيع ليومين، سيكون من الصعب عليه حتى الحركة. وإذا مر ثلاثة أيام دون بيع، قد يصل إلى حافة الموت.</p>
+<p>هؤلاء الرجال يقتلون ذلك العجوز ببطء. يدّعون ملكية شوارع لا يمكن لأحد أن يملكها حقًا.</p>
+<p>"يا أنتم!"</p>
+<p>استدار الرجال نحوي.</p>
+<p>"ماذا؟"</p>
+<p>طرحت عليهم سؤالًا وضعت فيه كل مشاعري:</p>
+<p>"من أي حاوية قمامة خرجتم حتى وصلتم إلى هنا؟"</p>
+<p>عقد قائد مجموعة القمامة حاجبيه وتقدم نحوي بخطوات متثاقلة.</p>
+<p>"من أين أتت هذه الفتاة المجنونة؟ ملابسك تجعلك تبدين مثل خادمة. على ماذا تضحكين؟ هل تريدين أن أمنعك من المرور في هذا الطريق؟ ها؟"</p>
+<p>نظرت إلى وجهه المتحمس بعناية، ثم أومأت برأسي.</p>
+<p>أنتم وصلتم في الوقت المناسب. كنت أحتاج للتنفيس عن بعض التوتر.</p>
+<p>رفعت يدي وربتت بلطف على وجه القمامة غير القابلة لإعادة التدوير.</p>
+<p>"كحة!"</p>
+<p>اصطدم جسده بالجدار القريب، ثم تدحرجت عيناه وسقط مغشيًا عليه.</p>
+<p>جعلت قطعة القمامة الثانية تبدو تمامًا مثل القائد، عيون متدحرجة وصوت مكتوم.</p>
+<p>"كحة!"</p>
+<p>عندها فقط، استعاد الثالث وعيه، وركض بعيدًا دون أن ينظر خلفه.</p>
+<p>هل ألحق به أم لا؟ لم يستغرق الأمر مني وقتًا طويلًا لأقرر. بدلاً من ملاحقته، جلست بجانب الرجل العجوز وبدأت أفتش بحماس في جيوب قائد القمامة.</p>
+<p>"أوه!"</p>
+<p>خرجت حزمة من النقود من جيبه. هل هي رسوم العضوية في جمعية التجار التي يضطرون للانضمام إليها بالقوة؟ بدت وكأنها تعادل إيجار شخص ما.</p>
+<p>"يا آنسة، انهضي. علينا أن نبتعد من هنا قبل أن يأتي الآخرون، حسنًا؟ هيا."</p>
+<p>الرجل العجوز، الذي استطاع أن يستجمع بعض قوته بطريقة ما، كان مصدومًا من أنني أسقطت رجلين، لكنه كان مشغولًا أكثر بمحاولة إبعادي عن الزقاق.</p>
+<p>في كل مرة يمسح فيها جبينه النازف، كانت كمه يصبح أكثر احمرارًا.</p>
+<p>"إنهم رجال مخيفون جدًا، لذا لا تأتي إلى هذا المكان مرة أخرى. لن يكون الأمر سيئًا إذا مات رجل عجوز مثلي، لكن إن تورطتِ أنتِ في شيء سيء، سيحزن والداك كثيرًا."</p>
+<p>كانت اليد المتجعدة التي تمسك ذراعي ما زالت ترتجف.</p>
+<p>الخوف الذي يُحفر مباشرة في الجسد لا يُنسى بسهولة.</p>
+<p>نظرت إلى وجه العجوز المتوتر وتذكرت كيف قام الأوغاد بدهسه، دحرجوه على الأرض وأفسدوا محصوله من البطاطس.</p>
+<p>إذا تركت الأمر ينتهي هكذا فقط، فسوف يعاني أمثال هذا العجوز مجددًا.</p>
+<p>طريقة تفكير هؤلاء الأوغاد دائمًا ما تكون هكذا. يفرغون غضبهم على الضعفاء. لا يفكرون في الأذى الذي تسببوا به، بل يستخدمون العنف لرفع مكانتهم.</p>
+<p>الضحية سيعاني أضرارًا أكبر، وهذا العجوز سيُجبر على مغادرة المدينة.</p>
+<p>"جدي."</p>
+<p>كيف تتوقع مني أن أهرب؟</p>
+<p>"هل تعرف أين يعيش هؤلاء الأشخاص؟"</p>
+<p>نظر إليّ العجوز بنظرة حائرة، ثم أشار إلى متجر في الطابق الأرضي بواجهة نظيفة على الرصيف المؤدي إلى السوق.</p>
+<p>"حانة - قطعة من الأرض"</p>
+<p>كانت لافتة الحانة توحي بأنها مكان مثالي لأمثال هؤلاء المتنمرين للعبث والتمادي.</p>
+<p>غريب.</p>
+<p>حسب ما أعلمه، الحانات في الإمبراطورية لم تكن مكانًا كهذا.</p>
+<p>كانت ملجأً للناس.</p>
+<p>خاصة في جنوب الإمبراطورية، حيث كانت تحت تأثير الساحر العظيم "ميفيستو"، كانت الحانات مركزًا لتجمعات أهلية، يجتمع فيها الناس لحماية مدنهم طواعية.</p>
+<p>هؤلاء المتجمعون في الحانات كانوا يحملون السلاح لحماية مدنهم، عائلاتهم وأصدقائهم.</p>
+<p>الحانات القريبة من الخطوط الأمامية كانت أيضًا تشارك في عمليات الإمداد داخل القرى نفسها. كانت صورتها في ذاكرتي مليئة بالفخر والحزن.</p>
+<p>"لكن هذا يبدو مثل جمعية تجارية."</p>
+<p>حسنًا، ربما يكون مفيدًا لي على الأقل في جمع المعلومات.</p>
+<p>أعدت للعجوز ثمن البطاطس الملقاة على الأرض.</p>
+<p>"لا تفتح متجرك غدًا. كن قويًا."</p>
+<p>ثم دسست بعض الأوراق النقدية في يده المتجعدة.</p>
+<p>"عالج جرح جبينك قبل أن يسوء. كن قويًا."</p>
+<p>بعد أن قذفت بالوغدين الساقطين إلى عمق الزقاق، توجهت عائدًا إلى السوق مع حزمة من الأوراق النقدية في صدري.</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+  </html>
