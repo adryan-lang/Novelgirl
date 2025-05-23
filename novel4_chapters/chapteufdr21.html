@@ -1,0 +1,549 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل الأول</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/cover4.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل الحادي والعشرون
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل الحادي والعشرون</p>
+<p>غرفة نوم مظلمة، تجمّع فيها ثلاثة أشخاص وبيضة.</p>
+<p>"توقّف عن قول هذا الهراء!"</p>
+<p>صرخة مدبرة الخدم كانت أقرب إلى صرخة مذعورة.</p>
+<p>وضعت يدها على جبينها وملامح وجهها مشوّهة من التوتر، ثم قالت من بين أسنانها بإحساس نادمٍ عميق:</p>
+<p>"ما هذا الهراء... أعتقد أنني تصرّفت بتهوّر. لماذا عرضتُ هذه الغرفة على السيّد رو؟"</p>
+<p>ومهما كانت ما تتمتم به، فإن "رو"، الشخص المقصود باللوم، لم يكن يستمع على الإطلاق.</p>
+<p>كان "رو" مشغولًا بتأمّل سطح البيضة الموضوعة في غرفة "الفيكونت ويذروودز"، وقد بدت عليه علامات اهتمامٍ شديد.</p>
+<p>اقتربتُ منه وسألته بهدوء:</p>
+<p>"هل هذا صحيح؟"</p>
+<p>فأجاب: "إذا كنتِ تنوين طرح سؤال، فعليكِ أولًا أن توضّحي ما هو السؤال بالضبط."</p>
+<p>يا له من شخص سيء الطباع... سألتُه مجددًا، وأنا أنظر إلى وجه مدبرة الخدم:</p>
+<p>"أسأل عمّا إذا كانت هذه البيضة واحدة من الأثار الخمسة الخاصة بـ ديان كيخت؟"</p>
+<p>الأثار الخمسة  الخاصة بـ ديان كيخت: هي خمس أدوات سحرية تابعة لهذا الساحر الأسطوري، ويُقال إنها قادرة على شفاء كل مرض لا علاج له، إذا جُمعت معًا.</p>
+<p>بعد أن أنهى "رو" ومدبرة الخدم عهدًا خاصًا بينهما قبل خمس دقائق فقط، صعدنا نحن الثلاثة معًا إلى غرفة نوم الفيكونت ويذروودز.</p>
+<p>لم يستطع "رو" إخفاء تعبير الصدمة على وجهه عندما عرف هوية السيّد الغامض.</p>
+<p>اقترب بخطواتٍ واسعة نحو السرير، ثم قال إنه يجب أن نفحص سطح البيضة بعناية.</p>
+<p>"أيتها الخادمة... هل قلتِ إن هذا هو الفيكونت ويذروودز؟"</p>
+<p>"نعم."</p>
+<p>"لا أعتقد ذلك."</p>
+<p>"قد لا تصدّقني، لكنه هو. هذه البيضة... لا، السيّد ويذروودز، أوكله إليّ سيدي السابق، وأوصاني مرارًا أن أعتني به..."</p>
+<p>"لا توجد حياة داخل هذه. هذه أداة سحرية من المستوى الرفيع، صُنعت بواسطة ساحرٍ دقيق الحرفة. وأنا أعرف ذلك جيدًا."</p>
+<p>"... ماذا؟"</p>
+<p>"خصوصًا من مظهرها الغريب، الذي يدلّ على ذوق صانعها الغريب."</p>
+<p>مرّر "رو" أصابعه الطويلة والرفيعة فوق سطح البيضة، ثم أطلق ضحكة خفيفة.</p>
+<p>"يبدو أنها من أعمال ديان كيخت."</p>
+<p>ارتبكت مدبرة الخدم من هذا الكشف المفاجئ، واتهمت "رو" بالكذب.</p>
+<p>وبالنظر إلى موقفها، فكان ردّ فعلها طبيعيًا، لكنني لم أستطع تأييد اعتراضها.</p>
+<p>‘رو ساحر بارع.’</p>
+<p>كما أنه كان من الباحثين عن أدوات ديان كيخت، مثلي تمامًا. لم يكن هناك سبب يدفعه لتحديد هوية البيضة هكذا من دون أساس.</p>
+<p>"... هاه، أعتذر، أيها السيّد رو. أظنّ أنني بالغتُ في ردّة فعلي. لا بد أن الجميع تراوده الشكوك بشأن هوية السيّد."</p>
+<p>تحدثت الخادمة بنبرة هادئة، وهي تحرّك شفتيها بهدوء:</p>
+<p>"لكن استنتاجك غير صحيح. هذه البيضة تنمو منذ أربع سنوات. ويمكنك أيضًا أن تشعر بنبضها إذا ألصقت أذنك بها. إنها تنبض بالحياة."</p>
+<p>"همم... يبدو أن الخادمة لا تصدّقني."</p>
+<p>ابتسم "رو" ابتسامة مشرقة، لكن عينيه كانتا تلمعان بشيء مظلم، ثم فجأة قبض قبضته.</p>
+<p>"حسنًا، سنكتشف الأمر بأنفسنا."</p>
+<p>كشيك—</p>
+<p>لم يكن هناك وقت لإيقافه. اخترقت قبضة "رو" سطح البيضة الأبيض الناعم.</p>
+<p>‘أنت...’</p>
+<p>لطالما كان مجنونًا، لكنه أكثر جنونًا اليوم!</p>
+<p>"مستحيل!"</p>
+<p>في اللحظة التي اندفعت فيها مدبرة الخدم وهي في حالة ذهول، محاوِلةً دفع "رو" بعيدًا من صدره، ظهرت في الجزء العلوي من البيضة البيضاء الناعمة حدقة بنّية اللون.</p>
+<p>كانت كأنها عين بشرية.</p>
+<p>– تم رصد ضرر.</p>
+<p>رأيتُ الأمر بوضوح. داخل القشرة كان فارغًا تمامًا.</p>
+<p>– استعادة السطح الخارجي.</p>
+<p>مع صدور هذا الأمر من صوتٍ غريبٍ وغير بشري، بدأت قطع القشرة التي تساقطت على السرير تطفو في الهواء.</p>
+<p>وما إن عادت القطع إلى أماكنها الأصلية واحدة تلو الأخرى، حتى استعادت البيضة شكلها الكامل — وكأن الثقب لم يوجد أصلًا.</p>
+<p>وبالطبع، اختفت العين البنّية أيضًا.</p>
+<p>"ما هذا..."</p>
+<p>تراجعت مدبرة الخدم وهي تنظر للمشهد بعينين خاليتين من الحياة.</p>
+<p>"لا، هذا جنون... هل هذه البيضة حقًا أداة سحرية؟ إذًا، ماذا عني أنا؟ ماذا عن كل ذلك الذي كنتُ أحرسه طوال هذا الوقت؟ السيّد... السيّد طلب مني أن..."</p>
+<p>"دعينا نكتشف ذلك الآن."</p>
+<p>قال "رو" بنبرة خفيفة، ثم وضع يده من جديد على سطح البيضة وبدأ في تلاوة تعاويذ طويلة يصعب تفسيرها.</p>
+<p>[شينغ—]</p>
+<p>اهتزت البيضة. وسرعان ما انبعث ضوء أزرق من سطحها الناعم.</p>
+<p>وخرجت من هذا الضوء حروفٌ براقة، تتمايل كالستائر في مهبّ الريح.</p>
+<p>ظهرت الحروف واحدة تلو الأخرى، حتى امتلأ مجال الرؤية بالكامل في لحظة.</p>
+<p>وانهمرت دمعة من عين مدبرة الخدم وهي تتابع هذا المشهد.</p>
+<p>"... لقد كانت فعلًا أداة سحرية..."</p>
+<p>ولا يمكن لأحد أن يُواسي خادمة حزينة سوى خادمة مثلها.</p>
+<p>وضعت يدي على كتفها، محاوِلةً تخفيف حزنها.</p>
+<p>"ليست مجرد أداة سحرية، بل أداة من أعلى جودة."</p>
+<p>"..."</p>
+<p>"لو بِعتِها، فستكونين وكأنكِ تصطادين في بِركةٍ من الذهب."</p>
+<p>"... الآنسة ديزي بحاجة لإعادة تعلّم كيف تُواسي الآخرين."</p>
+<p>رفعت الخادمة رأسها ببطء بعدما مسحت دموعها، ونظرت إلى الحروف التي ظهرت في الهواء. وبدأت ملامح الإعجاب الهادئ تظهر في عينيها الخاليتين من الحياة.</p>
+<p>"أليس هذا تعويذة سحرية؟ لم أرَ تفسيرًا بهذا التفصيل من قبل."</p>
+<p>أجاب "رو" بنبرة غير جادة:</p>
+<p>"لم يكن لديكِ وسيلة لرؤيتها سابقًا. العبقري الوحيد هنا هو أنا، ولهذا السبب."</p>
+<p>ثم بدأ "رو" يربط عناصر التعاويذ السحرية معًا ببطء. لا، بل بدا وكأنه يلخّصها.</p>
+<p>"أعتقد أن هذه الأداة صُمّمت للدفاع. تحتوي على مجموعة واسعة من التعاويذ الهجومية المختلفة. والهدف المحفور في ذاتها السحرية الاصطناعية هو..."</p>
+<p>ثم أضاف بنبرة غريبة:</p>
+<p>"حامية لعائلة ويذروودز."</p>
+<p>"حامية؟"</p>
+<p>"نعم، لا أجد تعبيرًا أدق من (حامية)."</p>
+<p>"يبدو أن الأمر كذلك، يا رئيسة الخدم."</p>
+<p>لكن لم يصلني أي رد.</p>
+<p>"هل تبكين؟"</p>
+<p>التفتُّ إليها بقلق.</p>
+<p>"...كان قلقي بلا داعٍ."</p>
+<p>بعكس توقعاتي، كانت عيناها مفتوحتين على وسعهما، والنظرة التي وجهتها نحو تحليل "رو" السحري كانت لامعة بالحماس.</p>
+<p>لم أصدق أنها نفس الشخص التي كانت تذرف الدموع قبل لحظات.</p>
+<p>'لم أرَ من قبل تفسيرًا طويلًا ومعقدًا للسحر بهذا الشكل'.</p>
+<p>التفسير السحري: هو عملية يقوم بها الساحر لتحليل البنية الداخلية لتعويذة سحرية وتحويلها إلى لغة مفهومة، اعتمادًا على حدسه ومعرفته وخبرته. وهو نوع من السحر المتقدم لا يقدر عليه المتدربون أو المبتدئون.</p>
+<p>كنتُ أنا أيضًا قد رأيت من قبل تفسيرات سحرية يقدمها سحرة اتحاد السحر، لكنها كانت دائمًا مختصرة وغير واضحة، مجرد كلمات ضبابية أو جُمل قصيرة.</p>
+<p>'لكن تفسير منظم بهذا الشكل لم أره قط في حياتي'.</p>
+<p>وقد كانت الخادمة أكثر من يشعر بعظمة هذا العمل، لأنها – مثل "رو" – ساحرة أيضًا.</p>
+<p>"يا إلهي... كل وصف هنا مكتوب بجُملٍ كاملة ومثالية."</p>
+<p>كان الاحترام والانبهار يتصاعدان في عيني الخادمة، وأطراف أصابعها المرتجفة كانت تتلمّس النقوش السحرية في الهواء بحذر شديد.</p>
+<p>ربما بسبب مهارات "رو" السحرية الاستثنائية، بدأت مشاعر الخادمة من الغضب والاتهام له بالكذب تتلاشى.</p>
+<p>يبدو أنها وصلت إلى نوع من القبول بعد إنكارها الأول وغضبها.</p>
+<p>'بما أنها بدأت تدرك الحقيقة... هل ستدخل في مرحلة الحزن؟'</p>
+<p>مراحل الصدمة النفسية الخمس:</p>
+<p>1. الإنكار</p>
+<p>2. الغضب</p>
+<p>3. المساومة أو التفاوض</p>
+<p>4. الاكتئاب</p>
+<p>5. التقبّل</p>
+<p>الصدمة ستكون قاسية، عندما تدرك أن الكيان الذي كرّست له حياتها لأربع سنوات لم يكن حقيقيًا.</p>
+<p>وقد يؤدي بها ذلك إلى فقدان معنى الحياة واتخاذ قرار أحمق...</p>
+<p>"يا سيد رو، من أين ظهرت؟ من الذي علّمك السحر؟ لا يمكن أن تصل إلى هذا المستوى في مثل سنك الظاهر. كم عمرك الحقيقي؟ أنا أغيب عن الوعي كل مرة أحاول فيها استخدام تفسير سحري... هل هذا فقط بسبب قلة التدريب؟ أم أن هناك سببًا آخر؟..."</p>
+<p>يبدو أنها بحالة ممتازة. لا داعي للقلق عليها.</p>
+<p>ولكن...</p>
+<p>'خصوصًا بالنظر إلى مظهر هذه الأداة الذي يوحي بذوق صانعها الغريب'.</p>
+<p>'يبدو أن هذه من أعمال ديان كِخت'.</p>
+<p>لكن شيء ما بدا غريبًا في حديثه.</p>
+<p>"رو."</p>
+<p>"رو؟"</p>
+<p>"يا سيد رو."</p>
+<p>أومأ وكأنه يطلب مني أن أكمل الحديث.</p>
+<p>"هل تعرف ديان كِخت؟"</p>
+<p>أجاب "رو" دون أن ينظر إليّ، وذراعاه معقودتان:</p>
+<p>"هل أنتِ فضولية؟"</p>
+<p>ذلك الجواب القصير منحني يقينًا جديدًا.</p>
+<p>"أنت تعرفه إذًا."</p>
+<p>ديان كِخت هو شخصية ماتت قبل ولادتي بسنوات. وإن كان "رو" يعرفه شخصيًا، فهذا يعني أنه يبلغ على الأقل أربعين عامًا.</p>
+<p>لكن هذا الحد الأدنى فقط. على حد علمي، ديان كِخت عاش نحو مئة عام قبل أن يموت.</p>
+<p>فكم يبلغ عمر "رو" حقًا؟</p>
+<p>'كنتُ أظن أنك مجنون قليلًا...'</p>
+<p>لكن يبدو أنك ساحر طويل العمر.</p>
+<p>يُقال إن أكثر من يصيبهم الجنون هم أولئك الذين يدرسون السحر حتى في شيخوختهم. والآن بدأت أفهم لماذا.</p>
+<p>لقد أضفتُ معلومات جديدة عن "رو":</p>
+<p> أولًا، هو ليس من النبلاء، لكن يملك ثروة كبيرة.</p>
+<p>ثانيًا، كان يعرف ديان كِخت.</p>
+<p>"لستُ فضولية."</p>
+<p>"حقًا؟ هذا مؤسف. حسنًا، الآن..."</p>
+<p>لوّح "رو" بيده في الهواء، واختفى التفسير السحري الذي كان يُزيّن الغرفة، كالحبر المُراق على الورق. وتنهدت رئيسة الخدم بأسى.</p>
+<p>"بما أننا تأكدنا من هوية سيّدنا الغامض، دعونا ننتقل إلى الخطوة التالية."</p>
+<p>"الخطوة التالية؟"</p>
+<p>"الحفلة النبيلة."</p>
+<p>عندها نظرت الخادمة إلى البيضة السحرية وتنهّدت بعمق. كانت التعابير الدقيقة على وجهها مليئة بالتعقيد.</p>
+<p>"بالتأكيد، إذا كان سحر السيد رو قويًا بهذا الشكل... يمكننا خداع أولئك النبلاء المتشككين الذين يملكون أعينًا كالصقور."</p>
+<p>"طبعًا."</p>
+<p>"الفيكونت ويذروودز المعروف للعامة هو ابن شقيق الفيكونت السابق. وبشكل أدق، هو ابن أخيه الأصغر الذي كان يصغره بسنتين. تزوج في سن مبكرة، وأنجب طفلًا قبل أخيه الأكبر. لكن العائلة بأكملها قُتلت في المعركة، ومع ذلك..."</p>
+<p>نجا الابن الوحيد، وورث لقب عائلة ويذروودز. وبما أن نسبه قريب، فلا خلاف على شرعية الوراثة.</p>
+<p>"لقد بلغ العشرين هذا العام، أي أصبح مؤهلاً للمشاركة في المناسبات الاجتماعية. لكني قلقة. لا أرتاح لفكرة ذهاب الآنسة ديزي وحدها. وفي المقابل، لا يبدو مناسبًا أن يتبعها الخدم أو الخادمات..."</p>
+<p>نعم، هذا صحيح.</p>
+<p>فإن كانت امرأة ترافقها خادمة، فهذا طبيعي، لأن المرأة قد تحتاج للمساعدة في الزينة أو تبديل الملابس. أما إن كان رجلاً أعزبًا، فإن مرافقة خادمة له قد تُفهم على نحوٍ خاطئ.</p>
+<p>خاصة أن وريث عائلة ويذروودز الذي ظهر بعد أربع سنوات سيجذب انتباهًا كبيرًا. الأفضل أن يبقى الأمر هادئًا قدر الإمكان.</p>
+<p>"إذًا، سنزوّجك. إذا وضعنا زوجة إلى جانبه، يمكننا السيطرة عليه جيدًا."</p>
+<p>'السيطرة؟ هل أنا كلب ضال يحتاج إلى قيود؟'</p>
+<p>لم تكن فكرة سيئة تمامًا، لكن ملامح الخادمة ظلّت متجهمة.</p>
+<p>"فكرة جيدة، لكنني لست في وضع يسمح لي بمغادرة القصر بسهولة."</p>
+<p>"لا يهم. لم أكن أنوي أن تكوني أنتِ."</p>
+<p>"ومن سيؤدي الدور إن لم أكن أنا؟"</p>
+<p>نظر "رو" إلى الخادمة وكأن سؤاله بديهي.</p>
+<p>'انتظر لحظة...'.</p>
+<p>"هل أنتَ جاد؟"</p>
+<p>"نعم، جاد."</p>
+<p>'لديّ شعور سيئ حيال هذا الأمر'.</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+  </html>
