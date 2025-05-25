@@ -1,0 +1,489 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>قراءة الفصل – الفصل السابع</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- خط عربي فخم -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+
+  <!-- Material Icons من Google -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.1/lottie.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pbF5X0FvCm8YbZSLfuNIc6U6VJohnsonVXG+YypFh9V+2fUm1kpz8+FZerpmXl15kd2Zjl1FKwIkHMDv6m0cw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+<script type="module">
+  // ★ استيراد Firebase + Firestore ★
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAnalytics }     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // ★ تهيئة مشروعك بالقيم الصحيحة ★
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBbvNSR8FQguOPwlLw_EHuVNzTt4LJe8rM",
+    authDomain:        "my-novels-site.firebaseapp.com",
+    projectId:         "my-novels-site",
+    storageBucket:     "my-novels-site.firebasestorage.app",
+    messagingSenderId: "902736822570",
+    appId:             "1:902736822570:web:af7780e3512944720c1e53",
+    measurementId:     "G-47GNFEQKEM"
+  };
+  const app       = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db        = getFirestore(app);
+
+  // ★ مساعدات لإنشاء المرجع ★
+  function refDoc(novelId, chapterId) {
+    return doc(db, 'reactions', novelId, 'chapters', chapterId);
+  }
+
+  // ★ جلب أو تهيئة أعداد التفاعلات ★
+  async function initReactions(novelId, chapterId) {
+    const r    = refDoc(novelId, chapterId);
+    const snap = await getDoc(r);
+    if (!snap.exists()) {
+      await setDoc(r, { like:0, love:0, haha:0, sad:0, angry:0 });
+      return { like:0, love:0, haha:0, sad:0, angry:0 };
+    }
+    return snap.data();
+  }
+
+  // ★ دالة لنقل التصويت (تخفض القديم وتزيد الجديد) ★
+  async function vote(novelId, chapterId, prevType, newType) {
+    const r       = refDoc(novelId, chapterId);
+    const updates = {};
+    if (prevType && prevType !== newType) {
+      updates[prevType] = increment(-1);
+    }
+    updates[newType] = increment(1);
+    await updateDoc(r, updates);
+  }
+
+  // ★ التنفيذ عند تحميل الصفحة ★
+  document.addEventListener('DOMContentLoaded', async () => {
+    const el        = document.getElementById('content');
+    const novelId   = el.dataset.novel;
+    const chapterId = el.dataset.chapter;
+    const voteKey   = `voted-${novelId}-${chapterId}`;
+
+    // 1) جلب الأعداد وعرضها
+    const data = await initReactions(novelId, chapterId);
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      const t = btn.dataset.reaction;
+      btn.querySelector('.count').textContent = data[t] ?? 0;
+    });
+
+    // 2) تعرف لو كان الزائر قد صوت سابقاً
+    let prev = localStorage.getItem(voteKey);
+
+    // 3) إذا صوت سابقاً ظلّل الزر المختار
+    if (prev) {
+      const activeBtn = document.querySelector(`.react-btn[data-reaction="${prev}"]`);
+      activeBtn?.classList.add('active-btn');
+    }
+
+    // 4) ربط حدث النقر لكل زر
+    document.querySelectorAll('.react-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.reaction;
+        if (type === prev) return;  // عدم إعادة التصويت على نفس الإيموجي
+        await vote(novelId, chapterId, prev, type);
+
+        // تحديث الواجهة: نقص من القديم وأضف إلى الجديد
+        if (prev) {
+          const oldSpan = document.querySelector(`.react-btn[data-reaction="${prev}"] .count`);
+          oldSpan.textContent = +oldSpan.textContent - 1;
+          document.querySelector(`.react-btn[data-reaction="${prev}"]`)
+                  .classList.remove('active-btn');
+        }
+        const newSpan = btn.querySelector('.count');
+        newSpan.textContent = +newSpan.textContent + 1;
+        btn.classList.add('active-btn');
+
+        // حفظ اختيار الزائر الجديد
+        localStorage.setItem(voteKey, type);
+        prev = type;
+      });
+    });
+  });
+    </script>
+<style>
+  :root {
+    --bg-color:      #f9fafb;
+    /* نحول --text-color ليخزن قيم RGB فقط (بدون #) */
+    --text-color:    31,41,55;
+    --text-opacity:  1;    /* القيمة الافتراضية */
+    --font-family:   'Cairo', sans-serif;
+    --font-size:     18px;
+  }
+
+  body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    /* الآن نستخدم rgba لربط اللون بالمتغيّرين */
+    color: rgba(var(--text-color), var(--text-opacity));
+    font-size: var(--font-size);
+    transition: background 0.3s, color 0.3s, font-size 0.3s, font-family 0.3s;
+  }
+
+  .lottie-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .active-btn {
+    @apply bg-indigo-100 ring-2 ring-indigo-300;
+  }
+  body, .no-select {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  }
+</style>
+</head>
+<body class="relative overflow-x-hidden">
+  <!-- شريط التقدم -->
+  <div id="progress" class="fixed top-0 left-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500 z-50" style="width:0"></div>  <!-- الصندوق الرئيسي -->  <div class="max-w-full max-h-screen mx-auto px-4 py-12 overflow-y-auto">
+
+<!-- غلاف الرواية -->
+<div class="w-full mb-6">
+  <img src="../images/Twin-Dukes-Obsession.jpg" alt="Twin Dukes Obsession">
+</div>
+    <!-- العنوان -->
+    <h1 class="text-center text-4xl font-extrabold mb-6 animate-gradient" style="font-family: 'Cairo', sans-serif;">
+   الفصل الثاني والثلاثون
+    </h1>
+    <div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div><!-- زر إعدادات القارئ -->
+<div class="flex justify-center mb-8">
+  <button id="open-settings"
+          class="px-6 py-3 rounded-full shadow-md hover:shadow-lg transition bg-indigo-500 text-white no-select">
+    إعدادات القارئ
+  </button>
+</div>
+
+<!-- المحتوى -->
+<div
+  id="content"
+  class="frame chapter-content no-select whitespace-pre-wrap break-words"
+  data-novel="chapters"
+  data-chapter="chapter1"
+>
+<p>الفصل 32</p>
+<p>"هل ستراهن على الخيول في السباق؟"</p>
+<p>أومأ آرثر برأسه.</p>
+<p>"يمكنك أن تراهن على أي حصان في أي سباق. بالطبع، لا أحد يعرف إن كان سيفوز أم يخسر."</p>
+<p>ارتسمت على وجهي علامات الشك لوهلة. كان ذلك طبيعياً، لأن كلمة "المراهنة" جعلتني أفكر مباشرة في والدي. عادت إلى ذهني ذكريات تلك الأيام التي كنا نختبئ فيها في الكوخ المتهالك والعلية ذات الأرضية المغطاة بالقش.</p>
+<p>قال لي آرثر ليطمئنني: "لا بأس يا ليلي. نفعل ذلك من باب التسلية، هذه المرة فقط. أنا وإيثان معك."</p>
+<p>ترددت قليلاً، ثم التفتُّ لأنظر إلى وجهي التوأمين. ابتسم آرثر بلطف، أما إيثان فكان وجهه جامداً، لكنه عندما التقت أعيننا، بدا وكأنه يطمئنني بصمت. وفي النهاية، أومأت بالموافقة.</p>
+<p>بعد أن فكّرنا ملياً، قررنا نحن الثلاثة أن نراهن على خيول مختلفة. اختار آرثر الحصان رقم 3، نجم صاعد؛ واختار إيثان الحصان رقم 11، الفائز في العام الماضي؛ أما أنا فاخترت الحصان رقم 7.</p>
+<p>لم تكن لدي أي معرفة بسباقات الخيول، لذا لم تكن هناك معايير حقيقية لاختياري. كان الفارس عجوزاً وله فوز سابق، والحصان نفسه ذكر يبلغ من العمر ثماني سنوات، لكني اخترته فقط لأن اسمه أعجبني. "ستراديفاريوس"—وهو اسم لأشهر كمان في العالم—يا له من اسم رائع!</p>
+<p>(ملاحظة: ستراديفاريوس: اسم يُطلق على نوع من الكمانات صنعه صانع الكمانات الإيطالي الشهير أنطونيو ستراديفاري، ويُعتبر من أفخم الآلات الموسيقية في العالم.)</p>
+<p>في الحقيقة، لم يكن الأمر مهماً؛ المبلغ الذي راهنّا به كان صغيراً، وكل ذلك كان للمتعة فقط. الفوز سيكون جميلاً، لكن الخسارة لن تهم. سواء كانت الحظوظ معنا أو لا، فسنعرف قريباً.</p>
+<p>كنت أمسك كأساً من الشمبانيا وأرتشف منها ببطء، مستمتعة بطعم السلمون، والفراولة، وغيرها من المأكولات الفاخرة على الطاولة الجانبية. أما إيثان، الذي بدا عليه الملل وهو يحتسي نبيذه، فقد حوّل انتباهه أخيراً إلى السباق عند انطلاقه، وبدا وكأنه يركز بشدة.</p>
+<p>قال أحدهم: "أوه! رقم 19 على الطرف الخارجي يؤدي بشكل جيد، أليس كذلك؟"</p>
+<p>وردّ الآخر: "ورقم 2 ليس بعيداً عنه أيضاً."</p>
+<p>كان من الممتع على نحو غير متوقع أن نشاهد من خلال المنظار ونخمن من قد يفوز. كان هناك سبعة سباقات في هذا اليوم، وكان "كأس الذهب"—وهو السباق الذي راهنّا عليه—هو السباق الرابع. وعندما بدأ السباق أخيراً، جلستُ منتصبة وأنا أتابع مضمار السباق بتركيز.</p>
+<p>يبدو أن هذا السباق هو الأطول في هذا المضمار—طوله أربعة آلاف متر—وتشارك فيه خيول من أعمار وأجناس مختلفة. وما إن فتح باب الانطلاق، حتى اندفعت عشرة خيول في الوقت ذاته.</p>
+<p>كان الحصان رقم 7، ستراديفاريوس، حصاناً أنيقاً ذا لون بني داكن، يلمع وبره كأنه الليل، ويمتطيه فارس يرتدي زيّاً أزرق. كنت أمسك منظاري الصغير، أتابعه بقلق وتوتر.</p>
+<p>ركضت الخيول في البداية في صف واحد، لكنها بدأت تدريجياً بالتجمع معًا. وبعد بعض الوقت، بدأت تتباعد كما لو أن العسل ينزل من الملعقة، فتكوّنت صفّان طويلان. وعندما تجاوزت المنعطف الأول، بدأ الفارق بين الفارس الذي في المقدمة وذلك الذي في المؤخرة يزداد تدريجيًا.</p>
+<p>ظل الحصان رقم 3 متقدمًا، واستمر ذلك حتى وصلوا إلى المنعطف الثاني. وعندما ظهرت المسافة المستقيمة الأخيرة، دقّ الجرس. وكأنها إشارة متفق عليها، انطلقت كل الخيول بأقصى سرعة ممكنة. وتعالت صيحات الجماهير.</p>
+<p>كان الفرسان، الذين كانوا واقفين في وضع مستقيم مدعومين بعضلات أرجلهم القوية وعضلات البطن، يتمايلون بعنف الآن. وكل واحد منهم كان يمسك اللجام بيد واحدة، ويضغط برأسه وجسده على ظهر الحصان. وبدأت السياط تضرب مؤخرة الخيول بسرعة وإلحاح.</p>
+<p>ثم، وبشكل غير متوقع، اندفع الحصان رقم 7 من فجوة صغيرة ظهرت من الداخل. كانت لحظة مليئة بالحماس الخالص. وبقوة انفجارية مذهلة، تجاوز جميع الخيول الأخرى في الجزء الأخير من السباق، بل ودفع فارس الحصان رقم 3 الذي كان في المقدمة.</p>
+<p>"ليلي! إنه رقم 7!"</p>
+<p>"يا للدهشة! كيف حدث ذلك!"</p>
+<p>لم أصدق عيني، فبدأت أقفز من مكاني بحماس. ومع اقتراب النهاية، ركضت الخيول بأقصى ما تملك من سرعة، بخطوات واسعة جدًا. وكان الفرسان يتمايلون بعنف شديد حتى أنني خفت أن يسقط أحدهم.</p>
+<p>وفي النهاية، عبر الحصان رقم 7 خط النهاية أولًا. فنهضت واقفة على الفور، وأنا ألوّح بقبضتي دون وعي.</p>
+<p>"واو! لقد فزنا!"</p>
+<p>"مبروك، ليلي!"</p>
+<p>ابتسم آرثر بسعادة. وبدأت أهوِّي على وجهي المتورد بورقة الرهان التي يظهر عليها الرقم والمبلغ. وتلقيت التهاني من كل من كان في المقصورة الملكية.</p>
+<p>"مبروك، يا دوقة!"</p>
+<p>ابتسمت ولية العهد ابتسامة مشرقة.</p>
+<p>"شكرًا لكم!"</p>
+<p>قال ولي العهد وهو يبتسم:</p>
+<p>"أن تفوزي في أول رهان لكِ، هذا حظ مذهل."</p>
+<p>كنت مذهولة وسعيدة في الوقت ذاته. ولكي أهدّئ من انفعالي، شربت القليل من الماء بسرعة.</p>
+<p>"لقد ربحنا عشرين ألف جنيه إسترليني كاملة!"</p>
+<p>قال إيثان، الذي ذهب للتحقق من مبلغ الربح، وهو يعود ليخبرني بالمبلغ.</p>
+<p>يا إلهي!</p>
+<p>لقد كان مبلغًا أكبر بكثير مما توقعت.</p>
+<p>لم يكن أحد يتوقع أن يفوز الحصان العجوز "ستراديفاريوس".</p>
+<p>"ماذا تريدين أن تفعلي به؟"</p>
+<p>"حسنًا...؟"</p>
+<p>لم أكن أتخيل أنني سأفوز، لذا لم أفكر أبدًا في ما سأفعله بالمال.</p>
+<p>"خذي وقتك في التفكير. لديكِ متسع من الوقت."</p>
+<p>أومأت برأسي ونهضت. بعد أن ذهبت إلى دورة المياه لأهدأ قليلًا، خرجت بهدوء من مخرج "الصندوق الملكي".</p>
+<p>كان الهواء منعشًا بشكل رائع، ربما لأنني كنت في مكان خانق. وبعد أن أنهيت حاجتي، تمشيت قليلًا فوق العشب.</p>
+<p>حاولت أن أراقب المكان من حولي دون أن أبدو فضولية، وهناك بجانب السور، كان فارسٌ يقود حصانًا برفقة المدرّب. توقفت وتراجعت خطوة عندما اقترب مني حصان ضخم، لكنني لم أستطع أن أزيح نظري عنهم، فقد أسرتني هيئتهم المهيبة.</p>
+<p>"تبا لهؤلاء الأوغاد! ألا يعلمون من أكون؟! حثالة قذرة..."</p>
+<p>فجأة، دوّت صيحات سبّ غاضبة، ففزعت والتفتُّ برأسي. كان هناك رجل في منتصف العمر، يرتدي قبعة قديمة مائلة على رأسه، يترنّح وهو يقترب نحوي. كان يتمتم بكلمات غاضبة، ووجهه قاتم وكئيب.</p>
+<p>"جميعهم حثالة قذرة... تمامًا مثل تلك العاهرة الملعونة. تبا...!"</p>
+<p>كان الرجل يترنّح وكأنه على وشك السقوط، ثم فجأة ثبت نظره عليّ. تجمّدتُ في مكاني وأنا أحدّق فيه بشرود. لم أستطع أن أمنع نفسي من تخيّل ملامح والدي تنعكس على وجهه.</p>
+<p>"ماذا؟ أنتِ هناك، أنتِ!"</p>
+<p>ناداني الرجل فجأة، فارتجفت واتسعت عيناي من المفاجأة. لم أكن أعلم إن كان يخاطبني، فنظرت حولي بسرعة، لكنني كنت وحيدة.</p>
+<p>"أنتِ! نعم، أنتِ! تتظاهري بعدم السماع، أليس كذلك؟!"</p>
+<p>رأى الرجل تعابير الحيرة على وجهي، فصرخ بغضب.</p>
+<p>"نعم؟ أنـا؟ هل تتحدث إليّ؟"</p>
+<p>"هاه! انظري من عاد! كنت أتساءل أين اختفيتِ، وها أنتِ هنا من جديد! من تحاولين إغواءه هذه المرة؟"</p>
+<p>صدمتني كلماته وهو يقترب مني بسرعة رغم خطواته غير المتزنة. بدا أنه يخلطني بشخصٍ آخر.</p>
+<p>"لا، أنا أظن أنك أخطأت..."</p>
+<p>لكن على عكس ما توقعت، لم تكن بنيته الضخمة تعيقه، وفجأة أصبح أمامي تمامًا. أمسك بعنقي دون سابق إنذار.</p>
+<p>"ماذا حدث لذاك المخادع كثير الكلام، هاه؟ هل يسير الأمر على ما يُرام مع ذاك القوّاد؟ حسنًا، لو كان كذلك، لما عدتِ إلى هنا تحاولين اصطياد ضحايا جدد، أليس كذلك؟ ترتدين كل هذا التأنق أيضًا."</p>
+<p>"أنا... أنا..."</p>
+<p>ضحك الرجل بسخرية، بينما كانت قبضته تشتد حول عنقي، وسرعان ما بدأت أختنق.</p>
+<p>"كان عليّ أن أقتلك في ذلك الحين. أيتها الطفيلية الحقيرة."</p>
+<p>صارعتُ لأحرر نفسي من قبضته، دون جدوى. ومع تزايد الاختناق، بدأت الرؤية تضعف أمام عيني.</p>
+<p>ثم حدث ذلك.</p>
+<p>"آاااه!"</p>
+<p>صرخة مفاجئة، وتحررت إحدى يديه التي كانت تطبق على عنقي. شهقتُ وأنا أتنفس بصعوبة، وأومضت بعيني اللتين امتلأتا بالدموع. خصلات شقراء تتلألأ تحت ضوء الشمس ملأت مجال رؤيتي.</p>
+<p>"اللعنة! من هناك؟ دعني! قلت لك دعني وشأني!"</p>
+<p>"إذا كنت ستشرب حتى تفقد وعيك، فافعل ذلك بهدوء. ما الذي تظن أنك تفعله، تعتدي على امرأة ضعيفة؟"</p>
+<p>كان صوته حادًا وباردًا. لقد كان إيثان.</p>
+<p>بطريقة ما، جعل الرجل يصرخ مثل الخنزير، وصرخ بألم عندما لف إيثان ذراعه بقوة. وعندما انتزع يده بعنف، نظر إيثان إليّ بينما كنت أتهاوى أرضًا، ممسكة بحنجرتي. ثم شد ذراع الرجل أكثر حتى تأوه من الألم.</p>
+<p>"إذا حاولت أي تصرف متهور، سأحولك إلى لحم مفروم في الحال. هل فهمت؟"</p>
+<p>تأوه الرجل وأومأ برأسه بسرعة. زمجر إيثان قائلاً:</p>
+<p>"إذن، اغرب عن وجهي حالًا!"</p>
+<p>أطلق إيثان سراح ذراع الرجل التي كانت ملتوية خلف ظهره، ودفعه في نفس الوقت. ترنح الرجل الضخم وسقط على الأرض بعنف. لكنه نهض بسرعة، التقط قبعته، وركض مبتعدًا.</p>
+<p>"ليلي."</p>
+<p>أسرع إيثان إليّ وركع بجانبي. كان يقبض فكيه بشدة لدرجة أني رأيت عضلات وجهه بارزة. وعندما رأيت تعابير وجهه الصلبة بينما كان يفحص عنقي، تمكنت أخيرًا من التحدث.</p>
+<p>"على الأرجح سيظهر كدمة."</p>
+<p>أومأ برأسه. فحّ صوتي عندما حاولت بلع ريقي. كان هناك ألم بسيط، لكنني كنت بخير على ما يبدو.</p>
+<p>"علينا أن نذهب إلى طبيب."</p>
+<p>أومأت برأسي ودعته يساعدني على الوقوف. احتواني بذراعه وهو يصعد بي الدرج. وعند المدخل، صادفنا آرثر، الذي جاء يبحث عنا.</p>
+<p>"ليلي؟ ماذا حدث؟"</p>
+<p>شرح له إيثان ما جرى، وظهرت الصدمة على وجه آرثر، الذي شحب لونه على الفور.</p>
+<p>"من كان ذلك؟"</p>
+<p>"البارون جورج هيكس."</p>
+<p>"آه...!"</p>
+<p>زم آرثر شفتيه وغضّ بصره كأنه فهم الأمر. شعرت ببعض الحيرة من ردة فعله.</p>
+<p>"من هو؟"</p>
+<p>بحسب شرح آرثر، فإن البارون هيكس رجل مطلّق حديثًا. طلاقه، الذي وقع بسبب خيانة زوجته، كان فضيحة كبيرة هزّت العاصمة بأكملها. ورغم أنه ربح القضية، إلا أن البارون، الذي لم يستطع كبح غضبه، بدأ يشرب الخمر بكثرة كل يوم. ويبدو أنه الآن يفقد أعصابه كلما رأى امرأة أو رجلًا شابًا.</p>
+<p>تنهدت.</p>
+<p>لم يكن بوسعي أن ألومه على حالته، لكنني كنت لسوء الحظ هدفًا لغضبه غير المبرر.</p>
+</div>
+
+<div class="divider h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6"></div>
+
+
+
+    </div>
+  <!-- نهاية الصندوق الرئيسي -->  <!-- مودال إعدادات القارئ -->  <div id="reader-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white text-gray-900 rounded-xl p-6 shadow-lg w-80 max-w-full">
+      <!-- رأس المودال -->
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">إعدادات القارئ</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <!-- اختيار الثيم -->
+      <div class="flex flex-wrap gap-2 mb-4 justify-center">
+        <button onclick="setTheme('')" class="px-3 py-1 rounded-full border">عادي</button>
+        <button onclick="setTheme('dark')" class="px-3 py-1 rounded-full bg-black text-white">أسود</button>
+        <button onclick="setTheme('brown')" class="px-3 py-1 rounded-full bg-amber-200">بني</button>
+        <button onclick="setTheme('blue')" class="px-3 py-1 rounded-full bg-blue-200">أزرق</button>
+        <button onclick="setTheme('green')" class="px-3 py-1 rounded-full bg-green-200">أخضر</button>
+        <button onclick="setTheme('pink')" class="px-3 py-1 rounded-full bg-pink-200">زهري</button>
+        <button onclick="setTheme('purple')" class="px-3 py-1 rounded-full bg-purple-200">أرجواني</button>
+      </div>
+      <!-- منسدلات الإعداد -->
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm mb-1">نوع الخط</label>
+<select onchange="document.documentElement.style.setProperty('--font-family', this.value)" class="w-full p-2 border rounded">
+  <option value="system-ui, sans-serif">خط المتصفح</option>
+  <option value="'Cairo', sans-serif" selected>خط كايرو</option>
+  <option value="'Amiri', serif">خط الأميرى</option>
+  <option value="'Tajawal', sans-serif">خط تجول</option>
+  </select>
+        </div>
+          <!-- حجم الخط -->
+  <div>
+    <label class="block text-sm mb-1">حجم الخط</label>
+    <select onchange="setFontSize(this.value)" class="w-full p-2 border rounded">
+      <option value="16px">90%</option>
+      <option value="18px" selected>100%</option>
+      <option value="22px">125%</option>
+      <option value="26px">150%</option>
+    </select>
+  </div>
+        <div>
+          <label class="block text-sm mb-1">ارتفاع الخط</label>
+          <select onchange="document.documentElement.style.setProperty('line-height', this.value)" class="w-full p-2 border rounded">
+            <option value="1.2">120%</option>
+            <option value="1.6" selected>160%</option>
+            <option value="2.0">200%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">درجة لون الخط</label>
+          <select onchange="document.documentElement.style.setProperty('--text-opacity', this.value)" class="w-full p-2 border rounded">
+            <option value="0.7">منخفضة</option>
+            <option value="0.85">متوسطة</option>
+            <option value="1" selected>مرتفعة</option>
+          </select>
+        </div>
+      </div>
+      <!-- شريط التنسيق بأيقونات Font Awesome -->
+<div class="flex justify-center items-center gap-4 pt-4 border-t">
+  <!-- غامق/B -->
+  <button id="bold-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_bold</span>
+  </button>
+
+  <!-- محاذاة لليسار -->
+  <button id="left-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_left</span>
+  </button>
+
+  <!-- محاذاة للمنتصف -->
+  <button id="center-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_center</span>
+  </button>
+
+  <!-- محاذاة لليمين -->
+  <button id="right-btn" class="px-2 py-1 border rounded focus:outline-none">
+    <span class="material-icons text-xl">format_align_right</span>
+  </button>
+</div>
+    </div>
+  </div>  <!-- سكربت المنع -->  <script>
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey && ['c','u','s'].includes(e.key.toLowerCase())) || e.key==='F12') e.preventDefault();
+    });
+  </script>
+<!-- سكربت الوظائف الموحد -->
+<script>
+  function setFontSize(size) {
+    document.documentElement.style.setProperty('--font-size', size);
+    localStorage.setItem('fontSize', size);
+  }
+  function setTheme(theme) {
+    const root = document.documentElement;
+    switch (theme) {
+      case 'dark':
+        root.style.setProperty('--bg-color', '#1e1e1e');
+        root.style.setProperty('--text-color', '#f3f4f6');
+        break;
+      case 'brown':
+        root.style.setProperty('--bg-color', '#efdfd3');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'blue':
+        root.style.setProperty('--bg-color', '#e0f2fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'green':
+        root.style.setProperty('--bg-color', '#d1fae5');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'pink':
+        root.style.setProperty('--bg-color', '#ffe4e6');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      case 'purple':
+        root.style.setProperty('--bg-color', '#ede9fe');
+        root.style.setProperty('--text-color', '#1f2937');
+        break;
+      default:
+        root.style.setProperty('--bg-color', '#f9fafb');
+        root.style.setProperty('--text-color', '#1f2937');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // استعادة الإعدادات
+    const fs      = localStorage.getItem('fontSize'),
+          th      = localStorage.getItem('theme'),
+          content = document.getElementById('content'),
+          prog    = document.getElementById('progress'),
+          btnTop  = document.getElementById('toTop'),
+          openBtn = document.getElementById('open-settings'),
+          closeBtn= document.getElementById('close-settings'),
+          modal   = document.getElementById('reader-settings-modal');
+
+    if (fs) setFontSize(fs);
+    if (th) setTheme(th);
+
+    // شريط التقدم وزر الرجوع للأعلى
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      prog.style.width = (window.scrollY / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      btnTop?.classList.toggle('hidden', window.scrollY < 300);
+    });
+    btnTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // مودال إعدادات القارئ
+    openBtn.addEventListener('click', () => modal.classList.toggle('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // تهيئة تفاعلات Lottie
+    ['like','love','haha','sad','angry'].forEach(type => {
+      const c = document.getElementById(`${type}-lottie`);
+      if (!c) return;
+      const anim = lottie.loadAnimation({
+        container: c, renderer: 'svg', loop: false, autoplay: false,
+        path: `/animations/${type}.json`
+      });
+      c.addEventListener('mouseenter', () => anim.play());
+      c.addEventListener('mouseleave', () => anim.goToAndStop(0, true));
+      c.parentElement.addEventListener('click', () => {
+        anim.play();
+      });
+    });
+
+    // ربط زرّ B وأزرار المحاذاة
+    const btns = {
+      bold:   document.getElementById('bold-btn'),
+      left:   document.getElementById('left-btn'),
+      center: document.getElementById('center-btn'),
+      right:  document.getElementById('right-btn')
+    };
+    function clearActive() {
+      Object.values(btns).forEach(b => b.classList.remove('active-btn'));
+    }
+    btns.bold.addEventListener('click', () => {
+      if (content.style.fontWeight === 'bold') {
+        content.style.fontWeight = 'normal';
+        btns.bold.classList.remove('active-btn');
+      } else {
+        content.style.fontWeight = 'bold';
+        clearActive();
+        btns.bold.classList.add('active-btn');
+      }
+    });
+    btns.left.addEventListener('click', () => {
+      content.style.textAlign = 'left'; clearActive(); btns.left.classList.add('active-btn');
+    });
+    btns.center.addEventListener('click', () => {
+      content.style.textAlign = 'center'; clearActive(); btns.center.classList.add('active-btn');
+    });
+    btns.right.addEventListener('click', () => {
+      content.style.textAlign = 'right'; clearActive(); btns.right.classList.add('active-btn');
+    });
+  });
+</script> 
+  <!-- plugin.js الأصلي -->  <script src="../js/plugin.js"></script></body>
+</html>
